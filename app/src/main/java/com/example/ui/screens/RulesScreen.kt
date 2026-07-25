@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -59,7 +61,7 @@ fun RulesScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Go Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -152,7 +154,7 @@ fun RulesScreen(
 
             // Rule #4: Room Entry Rules
             RuleCard(
-                icon = Icons.Default.Login,
+                icon = Icons.AutoMirrored.Filled.Login,
                 iconColor = TextSecondary,
                 title = "4. ROOM LOBBY TIMINGS & INTEGRITY",
                 description = "Room IDs and Passwords automatically unlock 15 minutes before the scheduled start under 'My Bookings'. You must join the custom room within 10 minutes. Do NOT share room details with unregistered players. Unlisted players will be kicked immediately."

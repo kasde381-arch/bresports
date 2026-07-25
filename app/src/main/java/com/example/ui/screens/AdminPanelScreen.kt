@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -355,7 +356,7 @@ fun AdminPanelScreen(
                                                 .weight(1.3f)
                                                 .height(38.dp)
                                         ) {
-                                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text("MARK AS PAID", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
@@ -1034,7 +1035,7 @@ fun AdminPanelScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = LiveRed),
                                 shape = RoundedCornerShape(6.dp)
                             ) {
-                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("SEND", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
                             }
