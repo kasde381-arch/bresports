@@ -13,7 +13,7 @@ workflows:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
       - name: Build Release APK
         script: |
-          gradle assembleRelease --no-daemon
+          chmod +x gradlew && ./gradlew assembleRelease --no-daemon
     artifacts:
       - app/build/outputs/apk/**/*.apk
     publishing:
