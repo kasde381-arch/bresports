@@ -126,7 +126,7 @@ fun LeaderboardScreen(
         val userName = if (currentUser?.gameName.isNullOrBlank()) "You ($usernameText)" else currentUser!!.gameName
         val userUid = if (currentUser?.gameUid.isNullOrBlank()) "UID: 84920419" else "UID: ${currentUser!!.gameUid}"
         
-        val realUserKills = userBookings.sumOf { 2 } + (realWinnings / 20) // calculate realistic kills
+        val realUserKills = userBookings.size * 2 + (realWinnings / 20) // calculate realistic kills
         val realUserPlayer = LeaderboardPlayer(
             name = userName,
             isLocalUser = true,
