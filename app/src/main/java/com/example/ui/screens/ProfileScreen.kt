@@ -13,7 +13,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -488,7 +491,7 @@ fun TransactionRowItem(
     val isDeposit = transaction.type == "DEPOSIT"
     val badgeBg = if (isDeposit) Color(0xFF1B5E20).copy(alpha = 0.15f) else Color(0xFFC62828).copy(alpha = 0.15f)
     val badgeIconTint = if (isDeposit) Color(0xFF4CAF50) else Color(0xFFEF5350)
-    val badgeIcon = if (isDeposit) Icons.Default.TrendingUp else Icons.Default.TrendingDown
+    val badgeIcon = if (isDeposit) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown
     
     val format = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
     val dateStr = format.format(Date(transaction.timestamp))
@@ -1629,7 +1632,7 @@ fun SupportOptionsModalSheet(
                         )
                     }
                     Icon(
-                        imageVector = Icons.Default.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = null,
                         tint = Color(0xFF229ED9),
                         modifier = Modifier.size(18.dp)

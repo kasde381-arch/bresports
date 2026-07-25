@@ -14,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -656,7 +658,7 @@ fun TransactionItem(transaction: WalletTransaction) {
     val isCredit = transaction.type == "DEPOSIT" || transaction.type == "MATCH_WINNING"
     val badgeBg = if (isCredit) Color(0xFF1B5E20).copy(alpha = 0.2f) else Color(0xFFC62828).copy(alpha = 0.2f)
     val badgeIconTint = if (isCredit) Color(0xFF4CAF50) else Color(0xFFEF5350)
-    val badgeIcon = if (isCredit) Icons.Default.TrendingUp else Icons.Default.TrendingDown
+    val badgeIcon = if (isCredit) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown
 
     Row(
         modifier = Modifier.fillMaxWidth(),

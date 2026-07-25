@@ -142,5 +142,6 @@ dependencies {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
   compilerOptions {
     allWarningsAsErrors.set(false)
+    freeCompilerArgs.addAll("-Xsuppress-version-warnings")
   }
 }
