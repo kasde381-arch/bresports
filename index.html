@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BR Esports - Play BGMI & Free Fire Tournaments | Win Real Cash Prizes</title>
+    <meta name="description" content="Join India's premier esports tournament platform. Play daily BGMI & Free Fire matches, earn kill rewards, and withdraw winnings instantly via UPI & Paytm.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-dark: #0A0D14;
+            --bg-card: #121824;
+            --bg-card-hover: #1A2234;
+            --border-color: #232D42;
+            --primary: #FF5722;
+            --primary-glow: rgba(255, 87, 34, 0.35);
+            --secondary: #FF9800;
+            --accent-green: #00E676;
+            --text-primary: #FFFFFF;
+            --text-secondary: #94A3B8;
+            --text-muted: #64748B;
+            --font-main: 'Outfit', sans-serif;
+            --font-heading: 'Rajdhani', sans-serif;
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 20%, rgba(255, 87, 34, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 60%, rgba(255, 152, 0, 0.06) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* Utility Components */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 28px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-heading);
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #FF5722, #FF3D00);
+            color: #FFFFFF;
+            box-shadow: 0 8px 24px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 87, 34, 0.5);
+            background: linear-gradient(135deg, #FF6E40, #FF3D00);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #FFFFFF;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-orange {
+            background: rgba(255, 87, 34, 0.15);
+            color: var(--primary);
+            border: 1px solid rgba(255, 87, 34, 0.3);
+        }
+
+        .badge-green {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .section-title h2 {
+            font-family: var(--font-heading);
+            font-size: 2.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            background: linear-gradient(180deg, #FFFFFF, #94A3B8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section-title p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 10px auto 0;
+        }
+
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(10, 13, 20, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 16px 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #FF5722, #FF9800);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            font-size: 1.4rem;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .logo-text {
+            font-family: var(--font-heading);
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #FFFFFF;
+            letter-spacing: 1px;
+        }
+
+        .logo-text span {
+            color: var(--primary);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: color 0.2s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 160px 0 100px;
+            position: relative;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.2f 0.8fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .hero-content h1 {
+            font-family: var(--font-heading);
+            font-size: 3.8rem;
+            font-weight: 800;
+            line-height: 1.1;
+            text-transform: uppercase;
+            margin: 20px 0;
+            letter-spacing: 1px;
+        }
+
+        .hero-content h1 span {
+            background: linear-gradient(135deg, #FF5722, #FF9800);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-content p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+            max-width: 580px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 48px;
+        }
+
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .stat-item h3 {
+            font-family: var(--font-heading);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-item p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .hero-visual {
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+
+        .phone-frame {
+            width: 300px;
+            height: 600px;
+            background: var(--bg-card);
+            border: 12px solid #1E2738;
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 40px var(--primary-glow);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .phone-notch {
+            width: 120px;
+            height: 20px;
+            background: #1E2738;
+            border-radius: 0 0 12px 12px;
+            margin: 0 auto;
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        .phone-screen {
+            padding: 30px 16px 16px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: linear-gradient(180deg, #0A0D14, #121824);
+        }
+
+        .phone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .phone-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .phone-wallet {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .phone-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .phone-card-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .phone-card-title {
+            font-family: var(--font-heading);
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .phone-card-prizes {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            background: rgba(0,0,0,0.2);
+            padding: 6px;
+            border-radius: 6px;
+        }
+
+        /* Games Section */
+        .games-section {
+            padding: 80px 0;
+            background: rgba(18, 24, 36, 0.5);
+            border-y: 1px solid var(--border-color);
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .game-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--primary);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4), 0 0 20px var(--primary-glow);
+        }
+
+        .game-icon-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 14px;
+            background: rgba(255, 87, 34, 0.1);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .game-card h3 {
+            font-family: var(--font-heading);
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .game-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Features Grid */
+        .features {
+            padding: 100px 0;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(255, 87, 34, 0.4);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-family: var(--font-heading);
+            font-size: 1.4rem;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* How it Works */
+        .how-it-works {
+            padding: 100px 0;
+            background: rgba(18, 24, 36, 0.3);
+            position: relative;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            position: relative;
+        }
+
+        .step-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            position: relative;
+        }
+
+        .step-number {
+            position: absolute;
+            top: -20px;
+            right: 20px;
+            font-family: var(--font-heading);
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: rgba(255, 87, 34, 0.2);
+            line-height: 1;
+        }
+
+        .step-card h3 {
+            font-family: var(--font-heading);
+            font-size: 1.4rem;
+            margin: 16px 0 10px;
+        }
+
+        .step-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Tournaments Preview */
+        .tournaments-preview {
+            padding: 100px 0;
+        }
+
+        .tournament-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+        }
+
+        .match-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .match-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+        }
+
+        .match-header {
+            background: linear-gradient(90deg, rgba(255,87,34,0.2), transparent);
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .match-title {
+            font-family: var(--font-heading);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .match-body {
+            padding: 20px;
+        }
+
+        .match-details-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        .detail-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .detail-val {
+            font-family: var(--font-heading);
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .progress-bar-bg {
+            height: 8px;
+            background: #1E2738;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FF5722, #FF9800);
+            width: 75%;
+            border-radius: 4px;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Download CTA Banner */
+        .cta-banner {
+            margin: 80px 0;
+            background: linear-gradient(135deg, rgba(255, 87, 34, 0.15), rgba(255, 152, 0, 0.1));
+            border: 1px solid rgba(255, 87, 34, 0.3);
+            border-radius: var(--radius-lg);
+            padding: 60px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-banner h2 {
+            font-family: var(--font-heading);
+            font-size: 3rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .cta-banner p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 650px;
+            margin: 0 auto 32px;
+        }
+
+        /* FAQ Accordion */
+        .faq {
+            padding: 80px 0;
+        }
+
+        .faq-accordion {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .faq-question i {
+            transition: transform 0.3s ease;
+            color: var(--primary);
+        }
+
+        .faq-answer {
+            padding: 0 24px 20px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            display: none;
+            line-height: 1.6;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 16px;
+        }
+
+        .faq-item.active .faq-answer {
+            display: block;
+        }
+
+        .faq-item.active .faq-question i {
+            transform: rotate(180deg);
+        }
+
+        /* Footer */
+        .footer {
+            background: #06080E;
+            border-top: 1px solid var(--border-color);
+            padding: 60px 0 30px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1.5fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-brand p {
+            margin-top: 16px;
+            color: var(--text-secondary);
+            max-width: 320px;
+        }
+
+        .footer-col h4 {
+            font-family: var(--font-heading);
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .footer-links {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        .social-icons {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .social-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .social-icon:hover {
+            background: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .footer-bottom {
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 992px) {
+            .hero-grid {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            .hero-content p {
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .hero-actions {
+                justify-content: center;
+            }
+            .hero-stats {
+                max-width: 500px;
+                margin: 0 auto;
+            }
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+            .mobile-menu-toggle {
+                display: block;
+            }
+            .hero-content h1 {
+                font-size: 2.8rem;
+            }
+            .section-title h2 {
+                font-size: 2.2rem;
+            }
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navbar -->
+    <header class="navbar">
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div class="logo-text">BR <span>ESPORTS</span></div>
+            </a>
+
+            <ul class="nav-links">
+                <li><a href="#games">Games</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#tournaments">Tournaments</a></li>
+                <li><a href="#faq">FAQ</a></li>
+            </ul>
+
+            <div class="nav-actions">
+                <a href="https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk" class="btn btn-primary" style="padding: 10px 20px; font-size: 0.95rem;">
+                    <i class="fa-solid fa-download"></i> Download App
+                </a>
+            </div>
+
+            <button class="mobile-menu-toggle">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-grid">
+            <div class="hero-content">
+                <div class="badge badge-orange">
+                    <i class="fa-solid fa-fire"></i> India's #1 Esports Tournament App
+                </div>
+                <h1>Play Matches. <span>Win Real Cash.</span> Instantly.</h1>
+                <p>Join daily BGMI & Free Fire matches, earn cash per kill, and withdraw your prize money directly to UPI, Paytm, or GPay within seconds.</p>
+
+                <div class="hero-actions">
+                    <a href="https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk" class="btn btn-primary">
+                        <i class="fa-solid fa-download"></i> Download APK (v2.0)
+                    </a>
+                    <a href="#tournaments" class="btn btn-secondary">
+                        <i class="fa-solid fa-gamepad"></i> View Schedule
+                    </a>
+                </div>
+
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <h3 id="stat-gamers">50K+</h3>
+                        <p>Active Gamers</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="stat-prizes">₹5 Lakhs+</h3>
+                        <p>Prizes Paid Out</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="stat-payout">Instant</h3>
+                        <p>UPI Withdrawals</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <!-- Phone Frame Preview -->
+                <div class="phone-frame">
+                    <div class="phone-notch"></div>
+                    <div class="phone-screen">
+                        <div class="phone-header">
+                            <div class="phone-user">
+                                <div class="user-avatar">BR</div>
+                                <div style="font-size: 0.8rem; font-weight: bold;">Pro Gamer</div>
+                            </div>
+                            <div class="phone-wallet">
+                                <i class="fa-solid fa-coins"></i> ₹1,250
+                            </div>
+                        </div>
+
+                        <!-- Live Match Card -->
+                        <div class="phone-card">
+                            <div class="phone-card-header">
+                                <span>BGMI SQUAD BATTLE</span>
+                                <span style="color: var(--accent-green); font-weight: bold;">LIVE NOW</span>
+                            </div>
+                            <div class="phone-card-title">Erangel Cash Royale #402</div>
+                            <div class="phone-card-prizes">
+                                <span>Prize: ₹2,000</span>
+                                <span>Per Kill: ₹25</span>
+                            </div>
+                        </div>
+
+                        <!-- Upcoming Match Card -->
+                        <div class="phone-card">
+                            <div class="phone-card-header">
+                                <span>FREE FIRE SOLO</span>
+                                <span style="color: var(--secondary);">UPCOMING</span>
+                            </div>
+                            <div class="phone-card-title">Bermuda Rush Hour</div>
+                            <div class="phone-card-prizes">
+                                <span>Prize: ₹800</span>
+                                <span>Entry: ₹15</span>
+                            </div>
+                        </div>
+
+                        <!-- Result Card -->
+                        <div class="phone-card" style="background: rgba(0, 230, 118, 0.08); border-color: rgba(0, 230, 118, 0.3);">
+                            <div class="phone-card-header">
+                                <span style="color: var(--accent-green);">PAYOUT SUCCESSFUL</span>
+                                <span>Just Now</span>
+                            </div>
+                            <div class="phone-card-title">Transferred ₹450 to UPI</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Games Section -->
+    <section class="games-section" id="games">
+        <div class="container">
+            <div class="section-title">
+                <div class="badge badge-orange">Supported Games</div>
+                <h2>Compete In Popular Battlegrounds</h2>
+                <p>Choose your battlefield, register your squad, and dominate the leaderboards.</p>
+            </div>
+
+            <div class="games-grid">
+                <div class="game-card">
+                    <div class="game-icon-box">
+                        <i class="fa-solid fa-crosshairs"></i>
+                    </div>
+                    <h3>BGMI (Battlegrounds Mobile)</h3>
+                    <p>Daily Classic Matches, TDM 4v4 Clashes, Erangel & Miramar Tournaments with high kill rewards.</p>
+                </div>
+
+                <div class="game-card">
+                    <div class="game-icon-box">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <h3>Free Fire MAX</h3>
+                    <p>Bermuda Survival, Clash Squad 4v4, Solo Rush, and Custom Room matches with instant room credentials.</p>
+                </div>
+
+                <div class="game-card">
+                    <div class="game-icon-box">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h3>Custom Room Formats</h3>
+                    <p>Solo, Duo, and Full 4-Player Squad formats with real-time slot tracking and automated scoreboards.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Key Features Grid -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-title">
+                <div class="badge badge-orange">Platform Features</div>
+                <h2>Built For Competitive Gamers</h2>
+                <p>Everything you need for a seamless, fair, and rewarding esports experience.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                    <h3>Instant UPI Cashouts</h3>
+                    <p>Withdraw your cash prize directly to PhonePe, Paytm, Google Pay, or BHIM UPI within 60 seconds.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-user-shield"></i></div>
+                    <h3>Anti-Cheat Protection</h3>
+                    <p>Strict player UID verification, spectator log monitoring, and zero tolerance for hackers or teamers.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-key"></i></div>
+                    <h3>Instant Room ID Delivery</h3>
+                    <p>Room ID & Password delivered directly in app 15 minutes before match start via push notification.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-gift"></i></div>
+                    <h3>Refer & Earn Program</h3>
+                    <p>Invite your gaming friends and earn ₹10 bonus cash instantly for every active referral.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>Live Leaderboards</h3>
+                    <p>Track your lifetime tournament wins, total kills, earnings, and profile ranking in real time.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><i class="fa-solid fa-headset"></i></div>
+                    <h3>24/7 Live Customer Support</h3>
+                    <p>Direct WhatsApp support & in-app ticketing team available round the clock for query resolution.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <div class="section-title">
+                <div class="badge badge-orange">Easy Steps</div>
+                <h2>How To Start Winning</h2>
+                <p>Get started in under 2 minutes and claim your welcome bonus.</p>
+            </div>
+
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">01</div>
+                    <div class="feature-icon"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                    <h3>Download & Register</h3>
+                    <p>Install the BR Esports Android APK and create your free account using your phone number.</p>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">02</div>
+                    <div class="feature-icon"><i class="fa-solid fa-gamepad"></i></div>
+                    <h3>Join A Tournament</h3>
+                    <p>Pick your game (BGMI / Free Fire), select an upcoming match, and enter your game UID.</p>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">03</div>
+                    <div class="feature-icon"><i class="fa-solid fa-trophy"></i></div>
+                    <h3>Play & Withdraw Cash</h3>
+                    <p>Enter the custom room, get kills & Chicken Dinner, and transfer winnings to your UPI account instantly!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tournaments Preview -->
+    <section class="tournaments-preview" id="tournaments">
+        <div class="container">
+            <div class="section-title">
+                <div class="badge badge-orange">Live Schedule</div>
+                <h2>Upcoming Daily Matches</h2>
+                <p>Register now before slots fill up!</p>
+            </div>
+
+            <div class="tournament-list">
+                <!-- Match 1 -->
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-title"><i class="fa-solid fa-crosshairs" style="color: var(--primary);"></i> BGMI Erangel Squad</span>
+                        <span class="badge badge-orange">Starts in 45m</span>
+                    </div>
+                    <div class="match-body">
+                        <div class="match-details-grid">
+                            <div>
+                                <div class="detail-label">PRIZE POOL</div>
+                                <div class="detail-val" style="color: var(--accent-green);">₹2,500</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">PER KILL</div>
+                                <div class="detail-val">₹20</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">ENTRY</div>
+                                <div class="detail-val">₹15</div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: 85%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>85 / 100 Slots Filled</span>
+                            <span>MAP: ERANGEL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Match 2 -->
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-title"><i class="fa-solid fa-bolt" style="color: var(--secondary);"></i> Free Fire Solo Survival</span>
+                        <span class="badge badge-green">FREE ENTRY</span>
+                    </div>
+                    <div class="match-body">
+                        <div class="match-details-grid">
+                            <div>
+                                <div class="detail-label">PRIZE POOL</div>
+                                <div class="detail-val" style="color: var(--accent-green);">₹500</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">PER KILL</div>
+                                <div class="detail-val">₹10</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">ENTRY</div>
+                                <div class="detail-val" style="color: var(--accent-green);">FREE</div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: 60%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>30 / 50 Slots Filled</span>
+                            <span>MAP: BERMUDA</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Match 3 -->
+                <div class="match-card">
+                    <div class="match-header">
+                        <span class="match-title"><i class="fa-solid fa-gun" style="color: var(--primary);"></i> BGMI TDM 4v4 Clash</span>
+                        <span class="badge badge-orange">LIMITED SLOTS</span>
+                    </div>
+                    <div class="match-body">
+                        <div class="match-details-grid">
+                            <div>
+                                <div class="detail-label">PRIZE POOL</div>
+                                <div class="detail-val" style="color: var(--accent-green);">₹800</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">FORMAT</div>
+                                <div class="detail-val">4v4</div>
+                            </div>
+                            <div>
+                                <div class="detail-label">ENTRY</div>
+                                <div class="detail-val">₹20</div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: 90%;"></div>
+                        </div>
+                        <div class="progress-info">
+                            <span>18 / 20 Teams Joined</span>
+                            <span>MAP: WAREHOUSE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download CTA Banner -->
+    <div class="container">
+        <section class="cta-banner">
+            <h2>Ready To Claim Your First Victory?</h2>
+            <p>Download the official BR Esports APK today, get free entry coins, and start converting your gaming skills into real cash rewards.</p>
+            <a href="https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk" class="btn btn-primary" style="font-size: 1.2rem; padding: 18px 36px;">
+                <i class="fa-solid fa-download"></i> DOWNLOAD APK NOW (15 MB)
+            </a>
+        </section>
+    </div>
+
+    <!-- FAQ Section -->
+    <section class="faq" id="faq">
+        <div class="container">
+            <div class="section-title">
+                <div class="badge badge-orange">Got Questions?</div>
+                <h2>Frequently Asked Questions</h2>
+                <p>Everything you need to know about BR Esports tournaments & payouts.</p>
+            </div>
+
+            <div class="faq-accordion">
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>Is playing esports tournaments on BR Esports legal in India?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Yes! Esports and video gaming tournaments are classified as games of skill under Indian laws. BR Esports strictly promotes competitive skill-based esports gaming.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>How do I get the Room ID & Password for my match?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Room ID and Password are published directly in your match details screen inside the app 15 minutes before the scheduled match start time. You will also receive an automated push notification.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>How fast are wallet cash withdrawals?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        Withdrawals are processed automatically via instant payout APIs. Once requested, prize money reaches your UPI account or Paytm wallet within 60 seconds.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span>What if a player uses hacks or cheats?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        BR Esports maintains a strict zero-tolerance anti-cheat policy. Spectator logs and kill replays are audited continuously. Any hacker is permanently banned, and match winnings are redistributed to fair players.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="#" class="logo">
+                        <div class="logo-icon"><i class="fa-solid fa-trophy"></i></div>
+                        <div class="logo-text">BR <span>ESPORTS</span></div>
+                    </a>
+                    <p>India's leading competitive esports and daily tournament platform for mobile gamers.</p>
+                    <div class="social-icons">
+                        <a href="https://whatsapp.com" class="social-icon" target="_blank"><i class="fa-brands fa-whatsapp"></i></a>
+                        <a href="https://telegram.org" class="social-icon" target="_blank"><i class="fa-brands fa-telegram"></i></a>
+                        <a href="https://youtube.com" class="social-icon" target="_blank"><i class="fa-brands fa-youtube"></i></a>
+                        <a href="https://instagram.com" class="social-icon" target="_blank"><i class="fa-brands fa-instagram"></i></a>
+                    </div>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Quick Links</h4>
+                    <ul class="footer-links">
+                        <li><a href="#games">Supported Games</a></li>
+                        <li><a href="#features">Key Features</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#tournaments">Live Schedule</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Legal & Fair Play</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">Terms & Conditions</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Fair Play Policy</a></li>
+                        <li><a href="#">Refund Policy</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col">
+                    <h4>Download App</h4>
+                    <p style="margin-bottom: 16px;">Get the latest Android APK directly from our official server.</p>
+                    <a href="https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk" class="btn btn-primary" style="padding: 10px 18px; font-size: 0.9rem;">
+                        <i class="fa-solid fa-android"></i> Download APK v2.0
+                    </a>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2026 BR Esports Platform. All rights reserved.</p>
+                <p>Designed for competitive mobile esports gamers.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Interactions -->
+    <script>
+        // FAQ Accordion Toggle
+        document.querySelectorAll('.faq-question').forEach(q => {
+            q.addEventListener('click', () => {
+                const item = q.parentElement;
+                item.classList.toggle('active');
+            });
+        });
+
+        // Smooth Scroll for Navigation Links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

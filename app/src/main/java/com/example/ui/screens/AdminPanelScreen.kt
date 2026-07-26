@@ -48,6 +48,9 @@ fun AdminPanelScreen(
     val matches by viewModel.matches.collectAsState()
     val transactions by viewModel.allTransactions.collectAsState()
     val latestVersionCode by viewModel.latestVersionCode.collectAsState()
+    val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
+    val remoteConfigUrl by viewModel.remoteConfigUrl.collectAsState()
+    var configUrlInput by remember(remoteConfigUrl) { mutableStateOf(remoteConfigUrl) }
     val announcement by viewModel.announcement.collectAsState()
     var announcementInput by remember(announcement) { mutableStateOf(announcement) }
     var isEditingAnnouncement by remember { mutableStateOf(false) }
@@ -1244,7 +1247,7 @@ fun AdminPanelScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "APP UPDATE CHECKER SIMULATOR",
+                                text = "IN-APP VERSION CHECKER (HOSTED JSON)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
                                 color = FireOrange,
@@ -1254,62 +1257,118 @@ fun AdminPanelScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Simulate the App Update flow. Local app is hardcoded to v1.0. If the version in the database is higher, the app will show a non-dismissible popup on startup prompting the user to update.",
+                            text = "Automatic online version check via hosted JSON / GitHub Releases config. Fetches latest version code, release notes, and direct APK download URL.",
                             fontSize = 11.sp,
                             color = TextSecondary,
                             lineHeight = 15.sp
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Remote JSON Config URL Input
+                        OutlinedTextField(
+                            value = configUrlInput,
+                            onValueChange = { configUrlInput = it },
+                            label = { Text("Hosted JSON Config URL", fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = FireOrange,
+                                unfocusedBorderColor = SlateDarkBorder,
+                                focusedLabelColor = FireOrange
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column {
-                                Text("Local Version Code:", fontSize = 11.sp, color = TextSecondary)
-                                Text("1 (v1.0)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Button(
+                                onClick = {
+                                    viewModel.updateRemoteConfigUrl(configUrlInput)
+                                    viewModel.checkAppVersionOnline(currentLocalVersionCode = 1, showToastOnUpToDate = true)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("SAVE & CHECK ONLINE", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Latest Version in DB:", fontSize = 11.sp, color = TextSecondary)
-                                Text(
-                                    text = "$latestVersionCode (v$latestVersionCode.0)",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (latestVersionCode == "1") Color.Green else FireOrange
-                                )
+
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.simulateUpdateAvailable(targetVersionCode = 2, isForce = true)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, FireOrange),
+                                modifier = Modifier.weight(1f).height(38.dp)
+                            ) {
+                                Text("TRIGGER v2.0 DIALOG", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = FireOrange)
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Current Status Card
+                        Surface(
+                            color = SlateDarkBg,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Current App Version:", fontSize = 11.sp, color = TextSecondary)
+                                    Text("v1.0 (Code 1)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Online Version Code:", fontSize = 11.sp, color = TextSecondary)
+                                    Text("v${appUpdateInfo.latestVersionName} (Code ${appUpdateInfo.latestVersionCode})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FireOrange)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Check Status:", fontSize = 11.sp, color = TextSecondary)
+                                    Text(appUpdateInfo.checkStatus, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (appUpdateInfo.checkStatus == "SUCCESS") Color.Green else Color.Yellow)
+                                }
+                                if (appUpdateInfo.errorMessage != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Error: ${appUpdateInfo.errorMessage}", fontSize = 10.sp, color = Color.Red)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Button(
-                                onClick = { viewModel.updateLatestVersionCode("1") },
+                                onClick = {
+                                    viewModel.updateLatestVersionCode("1")
+                                    viewModel.checkAppVersionOnline(currentLocalVersionCode = 1)
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (latestVersionCode == "1") SlateDarkBorder else Color(0xFF2E7D32)
                                 ),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f).height(38.dp)
                             ) {
-                                Text("SET TO v1.0 (NORMAL)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-
-                            Button(
-                                onClick = { viewModel.updateLatestVersionCode("2") },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (latestVersionCode == "2") SlateDarkBorder else FireOrange
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f).height(38.dp)
-                            ) {
-                                Text("SET TO v2.0 (TRIGGER)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("RESET TO v1.0", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
+
                     }
                 }
             }

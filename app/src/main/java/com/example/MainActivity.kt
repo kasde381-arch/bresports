@@ -1,7 +1,10 @@
 package com.example
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
+import com.example.data.model.AppUpdateInfo
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,16 +61,20 @@ class MainActivity : ComponentActivity() {
                 
                 val isAuthChecking by viewModel.isAuthChecking.collectAsState()
                 val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-                val latestVersionStr by viewModel.latestVersionCode.collectAsState()
-                val latestVersion = latestVersionStr.toIntOrNull() ?: 1
-                val currentVersion = 1
+                val updateInfo by viewModel.appUpdateInfo.collectAsState()
+                val isUpdateDismissed by viewModel.isUpdateDismissed.collectAsState()
+                val currentVersionCode = 1
 
-                if (latestVersion > currentVersion) {
+                if (updateInfo.latestVersionCode > currentVersionCode && !isUpdateDismissed) {
                     AppUpdateDialog(
-                        currentVersion = currentVersion,
-                        latestVersion = latestVersion,
+                        currentVersionCode = currentVersionCode,
+                        updateInfo = updateInfo,
+                        onDismiss = {
+                            viewModel.dismissUpdateDialog()
+                        },
                         onSimulateUpdateComplete = {
-                            viewModel.updateLatestVersionCode("1")
+                            viewModel.updateLatestVersionCode(currentVersionCode.toString())
+                            viewModel.dismissUpdateDialog()
                         }
                     )
                 }
@@ -364,18 +371,24 @@ data class NavigationItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppUpdateDialog(
-    currentVersion: Int,
-    latestVersion: Int,
+    currentVersionCode: Int,
+    updateInfo: AppUpdateInfo,
+    onDismiss: () -> Unit,
     onSimulateUpdateComplete: () -> Unit
 ) {
+    val context = LocalContext.current
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
 
     Dialog(
-        onDismissRequest = {}, // Non-dismissible
+        onDismissRequest = {
+            if (!updateInfo.isForceUpdate) {
+                onDismiss()
+            }
+        },
         properties = DialogProperties(
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
+            dismissOnBackPress = !updateInfo.isForceUpdate,
+            dismissOnClickOutside = !updateInfo.isForceUpdate,
             usePlatformDefaultWidth = false
         )
     ) {
@@ -383,7 +396,7 @@ fun AppUpdateDialog(
             colors = CardDefaults.cardColors(containerColor = SlateDarkSurface),
             shape = RoundedCornerShape(24.dp),
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxWidth(0.92f)
                 .border(2.dp, FireOrange.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
                 .padding(24.dp)
         ) {
@@ -391,7 +404,7 @@ fun AppUpdateDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Warning/Update Icon
+                // Update Icon
                 Box(
                     modifier = Modifier
                         .size(72.dp)
@@ -406,10 +419,10 @@ fun AppUpdateDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "CRITICAL UPDATE AVAILABLE",
+                    text = if (updateInfo.isForceUpdate) "CRITICAL UPDATE REQUIRED" else "NEW UPDATE AVAILABLE",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = TextPrimary,
@@ -419,23 +432,38 @@ fun AppUpdateDialog(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "v$currentVersion.0 → v$latestVersion.0",
+                    text = "v$currentVersionCode.0 → v${updateInfo.latestVersionName}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = FireOrangeLight
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = "A mandatory system update is required to continue playing in competitive tournaments, syncing match lobbies, and withdrawing prize coins safely.",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 16.sp
-                )
+                // Release Notes
+                Surface(
+                    color = SlateDarkBg,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "WHAT'S NEW:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = FireOrange
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = updateInfo.releaseNotes,
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 if (isDownloading) {
                     Column(
@@ -466,13 +494,19 @@ fun AppUpdateDialog(
                             kotlinx.coroutines.delay(100)
                             downloadProgress += 0.05f
                         }
-                        // download finished, simulate installation
-                        kotlinx.coroutines.delay(500)
+                        kotlinx.coroutines.delay(400)
                         onSimulateUpdateComplete()
                     }
                 } else {
                     Button(
-                        onClick = { isDownloading = true },
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.apkUrl))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
@@ -482,24 +516,61 @@ fun AppUpdateDialog(
                         Icon(Icons.Default.Download, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "DOWNLOAD & INSTALL UPDATE",
+                            text = "UPDATE NOW (DOWNLOAD APK)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = { isDownloading = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, FireOrange.copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                    ) {
+                        Icon(Icons.Default.InstallMobile, contentDescription = null, tint = FireOrange, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "SIMULATE DIRECT IN-APP INSTALL",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = FireOrange
+                        )
+                    }
+
+                    if (!updateInfo.isForceUpdate) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "REMIND ME LATER",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Connection: Secure peer-to-peer tunnels",
+                    text = "Source: Online GitHub Hosted Config JSON",
                     fontSize = 10.sp,
-                    color = TextSecondary.copy(alpha = 0.5f)
+                    color = TextSecondary.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center
                 )
             }
         }
     }
 }
+
 
 @Composable
 fun SplashScreen() {

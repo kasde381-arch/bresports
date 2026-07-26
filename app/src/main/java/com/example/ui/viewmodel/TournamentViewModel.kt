@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import com.example.data.model.SupportMessage
 import com.example.data.model.AppConfig
+import com.example.data.model.AppUpdateInfo
+import com.example.data.repository.VersionChecker
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -264,12 +266,96 @@ class TournamentViewModel(
         .map { it?.value ?: "1" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "1")
 
+    private val _appUpdateInfo = MutableStateFlow(AppUpdateInfo())
+    val appUpdateInfo: StateFlow<AppUpdateInfo> = _appUpdateInfo.asStateFlow()
+
+    private val _isUpdateDismissed = MutableStateFlow(false)
+    val isUpdateDismissed: StateFlow<Boolean> = _isUpdateDismissed.asStateFlow()
+
+    private val _remoteConfigUrl = MutableStateFlow(
+        prefs.getString("version_config_url", VersionChecker.DEFAULT_VERSION_JSON_URL) ?: VersionChecker.DEFAULT_VERSION_JSON_URL
+    )
+    val remoteConfigUrl: StateFlow<String> = _remoteConfigUrl.asStateFlow()
+
+    fun updateRemoteConfigUrl(newUrl: String) {
+        prefs.edit().putString("version_config_url", newUrl).apply()
+        _remoteConfigUrl.value = newUrl
+        viewModelScope.launch {
+            _eventFlow.emit(UIEvent.ShowMessage("Updated Version Config URL!"))
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _isUpdateDismissed.value = true
+    }
+
+    fun checkAppVersionOnline(currentLocalVersionCode: Int = 1, showToastOnUpToDate: Boolean = false) {
+        viewModelScope.launch {
+            _appUpdateInfo.value = _appUpdateInfo.value.copy(checkStatus = "CHECKING")
+            
+            // Check remote version json file on GitHub or configured URL
+            val result = VersionChecker.checkRemoteVersion(
+                configUrl = _remoteConfigUrl.value,
+                currentVersionCode = currentLocalVersionCode
+            )
+            
+            if (result.checkStatus == "SUCCESS") {
+                _appUpdateInfo.value = result
+                _isUpdateDismissed.value = false
+                repository.saveAppConfig(AppConfig("latest_version_code", result.latestVersionCode.toString()))
+                if (result.latestVersionCode > currentLocalVersionCode) {
+                    _eventFlow.emit(UIEvent.ShowMessage("New update found: v${result.latestVersionName}!"))
+                } else if (showToastOnUpToDate) {
+                    _eventFlow.emit(UIEvent.ShowMessage("App is up to date (v$currentLocalVersionCode.0)"))
+                }
+            } else {
+                // If remote check failed or offline, fall back to DB stored latest_version_code
+                val storedVersionStr = repository.observeAppConfig("latest_version_code").firstOrNull()?.value ?: "$currentLocalVersionCode"
+                val storedVersionCode = storedVersionStr.toIntOrNull() ?: currentLocalVersionCode
+                
+                _appUpdateInfo.value = AppUpdateInfo(
+                    latestVersionCode = storedVersionCode,
+                    latestVersionName = "$storedVersionCode.0",
+                    apkUrl = "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk",
+                    releaseNotes = "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements",
+                    isForceUpdate = storedVersionCode > currentLocalVersionCode,
+                    checkStatus = "SUCCESS",
+                    errorMessage = result.errorMessage
+                )
+                if (storedVersionCode > currentLocalVersionCode) {
+                    _eventFlow.emit(UIEvent.ShowMessage("Update available: v$storedVersionCode.0"))
+                } else if (showToastOnUpToDate) {
+                    _eventFlow.emit(UIEvent.ShowMessage("App is up to date (v$currentLocalVersionCode.0)"))
+                }
+            }
+        }
+    }
+
+    fun simulateUpdateAvailable(targetVersionCode: Int = 2, apkUrl: String? = null, isForce: Boolean = true) {
+        viewModelScope.launch {
+            val downloadUrl = apkUrl ?: "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk"
+            _appUpdateInfo.value = AppUpdateInfo(
+                latestVersionCode = targetVersionCode,
+                latestVersionName = "$targetVersionCode.0.0",
+                minSupportedVersionCode = 1,
+                apkUrl = downloadUrl,
+                releaseNotes = "• Brand new Tournament Battle Lobby UI\n• Anti-cheat security patches\n• Instant UPI cashout integration\n• Enhanced stability & bug fixes",
+                isForceUpdate = isForce,
+                checkStatus = "SUCCESS"
+            )
+            _isUpdateDismissed.value = false
+            repository.saveAppConfig(AppConfig("latest_version_code", targetVersionCode.toString()))
+            _eventFlow.emit(UIEvent.ShowMessage("Simulated update trigger: v$targetVersionCode.0.0"))
+        }
+    }
+
     fun updateLatestVersionCode(newVersion: String) {
         viewModelScope.launch {
             repository.saveAppConfig(AppConfig("latest_version_code", newVersion))
             _eventFlow.emit(UIEvent.ShowMessage("Latest version code updated to $newVersion"))
         }
     }
+
 
     val trustedAdmins: StateFlow<String> = repository.observeAppConfig("trusted_admins")
         .map { it?.value ?: "" }
@@ -638,6 +724,7 @@ class TournamentViewModel(
 
     // Seed database if empty
     init {
+        checkAppVersionOnline(currentLocalVersionCode = 1)
         viewModelScope.launch {
             repository.prepopulateDataIfEmpty()
             repository.checkAndGenerateDailyMatches()

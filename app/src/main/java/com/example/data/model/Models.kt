@@ -102,3 +102,14 @@ data class AppConfig(
     val value: String
 )
 
+data class AppUpdateInfo(
+    val latestVersionCode: Int = 1,
+    val latestVersionName: String = "1.0.0",
+    val minSupportedVersionCode: Int = 1,
+    val apkUrl: String = "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk",
+    val releaseNotes: String = "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements",
+    val isForceUpdate: Boolean = false,
+    val checkStatus: String = "IDLE", // "IDLE", "CHECKING", "SUCCESS", "ERROR"
+    val errorMessage: String? = null
+)
+
