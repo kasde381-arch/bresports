@@ -33,7 +33,7 @@ object VersionChecker {
                 val versionCode = json.optInt("versionCode", json.optInt("latestVersionCode", currentVersionCode))
                 val versionName = json.optString("versionName", json.optString("latestVersionName", "2.0.0"))
                 val minSupportedCode = json.optInt("minSupportedVersionCode", 1)
-                val apkUrl = json.optString("apkUrl", "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk")
+                val apkUrl = json.optString("apkUrl", "https://kasde381-arch.github.io/bresports/")
                 val releaseNotes = json.optString("releaseNotes", "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements\n• Anti-cheat integration")
                 val isForceUpdate = json.optBoolean("isForceUpdate", versionCode > minSupportedCode)
 

@@ -316,7 +316,7 @@ class TournamentViewModel(
                 _appUpdateInfo.value = AppUpdateInfo(
                     latestVersionCode = storedVersionCode,
                     latestVersionName = "$storedVersionCode.0",
-                    apkUrl = "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk",
+                    apkUrl = "https://kasde381-arch.github.io/bresports/",
                     releaseNotes = "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements",
                     isForceUpdate = storedVersionCode > currentLocalVersionCode,
                     checkStatus = "SUCCESS",
@@ -333,7 +333,7 @@ class TournamentViewModel(
 
     fun simulateUpdateAvailable(targetVersionCode: Int = 2, apkUrl: String? = null, isForce: Boolean = true) {
         viewModelScope.launch {
-            val downloadUrl = apkUrl ?: "https://github.com/aistudio-build/app-release/releases/latest/download/app-release.apk"
+            val downloadUrl = apkUrl ?: "https://kasde381-arch.github.io/bresports/"
             _appUpdateInfo.value = AppUpdateInfo(
                 latestVersionCode = targetVersionCode,
                 latestVersionName = "$targetVersionCode.0.0",
