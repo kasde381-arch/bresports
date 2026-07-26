@@ -63,7 +63,7 @@ class TournamentViewModel(
     private val _isAuthChecking = MutableStateFlow(true)
     val isAuthChecking: StateFlow<Boolean> = _isAuthChecking.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", true))
+    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     private val _announcement = MutableStateFlow(
@@ -210,8 +210,8 @@ class TournamentViewModel(
     }
 
     private val _activeUserId = MutableStateFlow(
-        if (prefs.getBoolean("is_logged_in", true)) {
-            prefs.getString("active_email", "kasde381@gmail.com")?.ifBlank { "kasde381@gmail.com" } ?: "kasde381@gmail.com"
+        if (prefs.getBoolean("is_logged_in", false)) {
+            prefs.getString("active_email", "") ?: ""
         } else {
             ""
         }
@@ -221,8 +221,8 @@ class TournamentViewModel(
     init {
         viewModelScope.launch {
             kotlinx.coroutines.delay(400)
-            val savedLoggedIn = prefs.getBoolean("is_logged_in", true)
-            val activeEmail = prefs.getString("active_email", "kasde381@gmail.com")?.ifBlank { "kasde381@gmail.com" } ?: "kasde381@gmail.com"
+            val savedLoggedIn = prefs.getBoolean("is_logged_in", false)
+            val activeEmail = prefs.getString("active_email", "") ?: ""
             if (savedLoggedIn && activeEmail.isNotBlank()) {
                 _activeUserId.value = activeEmail
                 _isLoggedIn.value = true
