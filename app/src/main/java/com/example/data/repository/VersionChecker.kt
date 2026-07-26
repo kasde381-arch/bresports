@@ -33,7 +33,7 @@ object VersionChecker {
                 val versionCode = json.optInt("versionCode", json.optInt("latestVersionCode", currentVersionCode))
                 val versionName = json.optString("versionName", json.optString("latestVersionName", "2.0.0"))
                 val minSupportedCode = json.optInt("minSupportedVersionCode", 1)
-                val apkUrl = json.optString("apkUrl", "https://github.com/kasde381-arch/bresports/releases/download/v1.0.0/app-release.apk")
+                val apkUrl = json.optString("apkUrl", "https://drive.google.com/file/d/1lSN_iu9ppXc3_OvQQdW-TeCwP8sWkJzk/view?usp=drivesdk")
                 val releaseNotes = json.optString("releaseNotes", "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements\n• Anti-cheat integration")
                 val isForceUpdate = json.optBoolean("isForceUpdate", versionCode > minSupportedCode)
 

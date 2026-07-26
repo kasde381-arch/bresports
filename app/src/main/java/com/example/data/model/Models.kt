@@ -106,7 +106,7 @@ data class AppUpdateInfo(
     val latestVersionCode: Int = 1,
     val latestVersionName: String = "1.0.0",
     val minSupportedVersionCode: Int = 1,
-    val apkUrl: String = "https://github.com/kasde381-arch/bresports/releases/download/v1.0.0/app-release.apk",
+    val apkUrl: String = "https://drive.google.com/file/d/1lSN_iu9ppXc3_OvQQdW-TeCwP8sWkJzk/view?usp=drivesdk",
     val releaseNotes: String = "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements",
     val isForceUpdate: Boolean = false,
     val checkStatus: String = "IDLE", // "IDLE", "CHECKING", "SUCCESS", "ERROR"

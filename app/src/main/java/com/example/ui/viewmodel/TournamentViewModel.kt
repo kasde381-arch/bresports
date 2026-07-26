@@ -316,7 +316,7 @@ class TournamentViewModel(
                 _appUpdateInfo.value = AppUpdateInfo(
                     latestVersionCode = storedVersionCode,
                     latestVersionName = "$storedVersionCode.0",
-                    apkUrl = "https://github.com/kasde381-arch/bresports/releases/download/v1.0.0/app-release.apk",
+                    apkUrl = "https://drive.google.com/file/d/1lSN_iu9ppXc3_OvQQdW-TeCwP8sWkJzk/view?usp=drivesdk",
                     releaseNotes = "• Critical tournament lobby stability fixes\n• Instant wallet deposit & coin sync improvements",
                     isForceUpdate = storedVersionCode > currentLocalVersionCode,
                     checkStatus = "SUCCESS",
@@ -333,7 +333,7 @@ class TournamentViewModel(
 
     fun simulateUpdateAvailable(targetVersionCode: Int = 2, apkUrl: String? = null, isForce: Boolean = true) {
         viewModelScope.launch {
-            val downloadUrl = apkUrl ?: "https://github.com/kasde381-arch/bresports/releases/download/v1.0.0/app-release.apk"
+            val downloadUrl = apkUrl ?: "https://drive.google.com/file/d/1lSN_iu9ppXc3_OvQQdW-TeCwP8sWkJzk/view?usp=drivesdk"
             _appUpdateInfo.value = AppUpdateInfo(
                 latestVersionCode = targetVersionCode,
                 latestVersionName = "$targetVersionCode.0.0",
