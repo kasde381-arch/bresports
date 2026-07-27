@@ -307,6 +307,10 @@ fun MyWalletScreen(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
+                        var dialogAmount by remember { mutableStateOf("100") }
+                        var dialogUtr by remember { mutableStateOf("") }
+                        var showManualQrSection by remember { mutableStateOf(false) }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -320,13 +324,22 @@ fun MyWalletScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "UPI QR DEPOSIT",
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 18.sp,
-                                    color = FireOrange,
-                                    letterSpacing = 0.5.sp
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Payment,
+                                        contentDescription = null,
+                                        tint = FireOrange,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "DEPOSIT COINS",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = TextPrimary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
                                 IconButton(onClick = { showDepositDialog = false }) {
                                     Icon(
                                         imageVector = Icons.Default.Close,
@@ -336,29 +349,9 @@ fun MyWalletScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                            // centering high-res QR code image with white background
-                            Box(
-                                modifier = Modifier
-                                    .size(200.dp)
-                                    .background(Color.White, RoundedCornerShape(12.dp))
-                                    .border(2.dp, FireOrange, RoundedCornerShape(12.dp))
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.img_payment_qr_1783579165503),
-                                    contentDescription = "Payment QR Code",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // UPI ID Text Display with Copy Button
-                            val upiId = "anil612@fam"
+                            // Key ID Information Badge
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = SlateDarkBg),
                                 modifier = Modifier
@@ -368,34 +361,27 @@ fun MyWalletScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                        .padding(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = GoldBooyah,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Column {
                                         Text(
-                                            "OFFICIAL UPI ID",
-                                            fontSize = 9.sp,
-                                            color = TextSecondary,
-                                            fontWeight = FontWeight.Bold
+                                            "RAZORPAY GATEWAY CONNECTED",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldBooyah
                                         )
                                         Text(
-                                            upiId,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = TextPrimary
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(upiId))
-                                            Toast.makeText(context, "UPI ID Copied!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = "Copy UPI ID",
-                                            tint = GoldBooyah
+                                            "Key: rzp_test_TIWak1NzU449DM • 1 Coin = ₹1.00",
+                                            fontSize = 11.sp,
+                                            color = TextSecondary
                                         )
                                     }
                                 }
@@ -404,11 +390,10 @@ fun MyWalletScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Input field: Amount
-                            var dialogAmount by remember { mutableStateOf("") }
                             OutlinedTextField(
                                 value = dialogAmount,
                                 onValueChange = { dialogAmount = it.filter { c -> c.isDigit() } },
-                                label = { Text("Deposit Amount (Coins / ₹)") },
+                                label = { Text("Enter Deposit Amount (Coins / ₹)") },
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.MonetizationOn,
@@ -430,9 +415,9 @@ fun MyWalletScreen(
                             )
 
                             // Preset Chips for Dialog amount
-                            val dialogPresetAmounts = listOf(100, 200, 500, 1000)
+                            val dialogPresetAmounts = listOf(50, 100, 200, 500, 1000)
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 items(dialogPresetAmounts) { amt ->
@@ -447,62 +432,189 @@ fun MyWalletScreen(
                                 }
                             }
 
-                            // Input field: UTR / Transaction ID
-                            var dialogUtr by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = dialogUtr,
-                                onValueChange = { dialogUtr = it },
-                                label = { Text("UTR / Transaction ID (12 digits)") },
-                                placeholder = { Text("e.g. 618392019483") },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Receipt,
-                                        contentDescription = null,
-                                        tint = FireOrange
-                                    )
-                                },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = TextPrimary,
-                                    unfocusedTextColor = TextPrimary,
-                                    focusedBorderColor = FireOrange,
-                                    unfocusedBorderColor = SlateDarkBorder,
-                                    focusedContainerColor = SlateDarkBg,
-                                    unfocusedContainerColor = SlateDarkBg
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)
-                            )
-
-                            // SUBMIT REQUEST Button
+                            // PROMINENT RAZORPAY PAYMENT BUTTON
+                            val currentAmt = dialogAmount.toIntOrNull() ?: 0
                             Button(
                                 onClick = {
-                                    val amount = dialogAmount.toIntOrNull() ?: 0
-                                    if (amount < 10) {
-                                        Toast.makeText(context, "Minimum deposit is 10 coins", Toast.LENGTH_SHORT).show()
+                                    if (currentAmt <= 0) {
+                                        Toast.makeText(context, "Please enter a valid deposit amount", Toast.LENGTH_SHORT).show()
                                         return@Button
                                     }
-                                    if (dialogUtr.isBlank() || dialogUtr.length < 6) {
-                                        Toast.makeText(context, "Please enter a valid Transaction ID / UTR", Toast.LENGTH_SHORT).show()
-                                        return@Button
+                                    val activity = context as? com.example.MainActivity
+                                    if (activity != null) {
+                                        activity.startRazorpayPayment(
+                                            amount = currentAmt,
+                                            userEmail = user?.email ?: "",
+                                            userPhone = user?.phone ?: "",
+                                            viewModel = viewModel
+                                        )
+                                        showDepositDialog = false
+                                    } else {
+                                        Toast.makeText(context, "Unable to launch payment modal", Toast.LENGTH_SHORT).show()
                                     }
-
-                                    // Submit the request to viewmodel (requires manual Admin approval)
-                                    viewModel.depositViaQr(amount, dialogUtr, "anil612@fam")
-                                    showDepositDialog = false
                                 },
-                                enabled = dialogAmount.isNotBlank() && dialogUtr.isNotBlank(),
+                                enabled = currentAmt > 0,
                                 colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(52.dp)
+                                    .border(1.dp, GoldBooyah.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = GoldBooyah,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (currentAmt > 0) "PAY ₹$currentAmt VIA RAZORPAY" else "PAY VIA RAZORPAY",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 15.sp,
+                                        letterSpacing = 0.5.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Manual QR Code Toggle
+                            TextButton(
+                                onClick = { showManualQrSection = !showManualQrSection }
                             ) {
                                 Text(
-                                    "SUBMIT REQUEST",
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    text = if (showManualQrSection) "Hide Manual UPI QR Option ▲" else "Alternative: Pay via UPI QR / UTR Manual Deposit ▼",
+                                    fontSize = 12.sp,
+                                    color = TextSecondary,
+                                    fontWeight = FontWeight.Medium
                                 )
+                            }
+
+                            if (showManualQrSection) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(180.dp)
+                                        .background(Color.White, RoundedCornerShape(12.dp))
+                                        .border(2.dp, FireOrange, RoundedCornerShape(12.dp))
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.img_payment_qr_1783579165503),
+                                        contentDescription = "Payment QR Code",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                val upiId = "anil612@fam"
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = SlateDarkBg),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, SlateDarkBorder, RoundedCornerShape(8.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                "OFFICIAL UPI ID",
+                                                fontSize = 9.sp,
+                                                color = TextSecondary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                upiId,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = TextPrimary
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                clipboardManager.setText(AnnotatedString(upiId))
+                                                Toast.makeText(context, "UPI ID Copied!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "Copy UPI ID",
+                                                tint = GoldBooyah
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = dialogUtr,
+                                    onValueChange = { dialogUtr = it },
+                                    label = { Text("UTR / Transaction ID (12 digits)") },
+                                    placeholder = { Text("e.g. 618392019483") },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Receipt,
+                                            contentDescription = null,
+                                            tint = FireOrange
+                                        )
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedBorderColor = FireOrange,
+                                        unfocusedBorderColor = SlateDarkBorder,
+                                        focusedContainerColor = SlateDarkBg,
+                                        unfocusedContainerColor = SlateDarkBg
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                                )
+
+                                Button(
+                                    onClick = {
+                                        if (currentAmt < 10) {
+                                            Toast.makeText(context, "Minimum deposit is 10 coins", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        }
+                                        if (dialogUtr.isBlank() || dialogUtr.length < 6) {
+                                            Toast.makeText(context, "Please enter a valid Transaction ID / UTR", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        }
+
+                                        viewModel.depositViaQr(currentAmt, dialogUtr, "anil612@fam")
+                                        showDepositDialog = false
+                                    },
+                                    enabled = currentAmt > 0 && dialogUtr.isNotBlank(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SlateDarkSurface),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                        .border(1.dp, SlateDarkBorder, RoundedCornerShape(8.dp))
+                                ) {
+                                    Text(
+                                        "SUBMIT UTR FOR MANUAL VERIFICATION",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = TextPrimary
+                                    )
+                                }
                             }
                         }
                     }

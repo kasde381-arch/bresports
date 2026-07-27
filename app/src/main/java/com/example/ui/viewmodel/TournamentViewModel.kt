@@ -1191,6 +1191,61 @@ class TournamentViewModel(
         }
     }
 
+    fun processRazorpayPaymentSuccess(paymentId: String, amount: Int) {
+        viewModelScope.launch {
+            val currentUserId = _activeUserId.value
+            val activeEmail = if (currentUserId.isNotBlank()) currentUserId else prefs.getString("active_email", "") ?: "local_user"
+            
+            val currentUser = repository.getUser(activeEmail).firstOrNull() ?: User(id = activeEmail)
+            val newBalance = currentUser.coinBalance + amount
+
+            val updatedUser = currentUser.copy(
+                id = activeEmail,
+                coinBalance = newBalance
+            )
+
+            // 1. Update local Room DB and SharedPreferences
+            repository.saveUserProfile(updatedUser)
+            prefs.edit().putInt("user_coins_$activeEmail", newBalance).apply()
+
+            // 2. Sync updated user profile to Cloud Firestore
+            try {
+                firebaseRepository.saveUserProfileToFirestore(updatedUser)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 3. Create transaction log with Razorpay Payment ID
+            val txn = WalletTransaction(
+                userId = activeEmail,
+                type = "DEPOSIT",
+                amount = amount,
+                title = "Razorpay Deposit",
+                timestamp = System.currentTimeMillis(),
+                paymentMethod = "Razorpay Gateway",
+                accountDetail = "Payment ID: $paymentId",
+                status = "SUCCESS",
+                transactionRef = paymentId
+            )
+
+            // 4. Save transaction to local Room DB and Cloud Firestore
+            repository.insertTransaction(txn)
+            try {
+                firebaseRepository.saveTransactionToFirestore(txn)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 5. Refresh registered users list
+            refreshRegisteredUsers()
+
+            // 6. Notify UI instantly
+            _eventFlow.emit(
+                UIEvent.ShowMessage("🎉 Deposit Successful! $amount Coins added to your Wallet. Razorpay ID: $paymentId")
+            )
+        }
+    }
+
     fun approveTransaction(id: Int, quiet: Boolean = false) {
         viewModelScope.launch {
             val txn = repository.getTransactionById(id)
