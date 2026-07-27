@@ -3,12 +3,23 @@ package com.example.data.repository
 import com.example.data.model.Booking
 import com.example.data.model.User
 import com.example.data.model.WalletTransaction
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 class FirebaseRepository {
+
+    private fun ensureFirebaseInitialized() {
+        try {
+            FirebaseApp.getInstance()
+        } catch (e: Throwable) {
+            // If default app is not initialized by google-services plugin content provider
+            e.printStackTrace()
+        }
+    }
 
     private val auth: FirebaseAuth? by lazy {
         try {
