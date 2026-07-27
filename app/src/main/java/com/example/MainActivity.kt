@@ -51,6 +51,21 @@ import androidx.compose.ui.draw.clip
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        try {
+            if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
+                val options = com.google.firebase.FirebaseOptions.Builder()
+                    .setProjectId("br-esports-c9691")
+                    .setApplicationId("1:550699681641:android:15a5e611ffd806c8f25ff8")
+                    .setApiKey("AIzaSyDcwOCTFs2yKRu9Nxms1vBTaHAzDvzInAY")
+                    .setStorageBucket("br-esports-c9691.firebasestorage.app")
+                    .build()
+                com.google.firebase.FirebaseApp.initializeApp(this, options)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
