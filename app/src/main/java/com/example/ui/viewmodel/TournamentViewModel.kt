@@ -30,6 +30,7 @@ import com.example.data.model.SupportMessage
 import com.example.data.model.AppConfig
 import com.example.data.model.AppUpdateInfo
 import com.example.data.repository.VersionChecker
+import com.example.data.repository.FirebaseRepository
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -59,6 +60,7 @@ class TournamentViewModel(
 ) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    val firebaseRepository = FirebaseRepository()
 
     private val _isAuthChecking = MutableStateFlow(true)
     val isAuthChecking: StateFlow<Boolean> = _isAuthChecking.asStateFlow()
@@ -220,12 +222,37 @@ class TournamentViewModel(
 
     init {
         viewModelScope.launch {
-            kotlinx.coroutines.delay(400)
+            kotlinx.coroutines.delay(200)
+            val firebaseEmail = firebaseRepository.getCurrentUserEmail()
             val savedLoggedIn = prefs.getBoolean("is_logged_in", false)
-            val activeEmail = prefs.getString("active_email", "") ?: ""
-            if (savedLoggedIn && activeEmail.isNotBlank()) {
+            val activeEmail = firebaseEmail ?: prefs.getString("active_email", "") ?: ""
+
+            if (activeEmail.isNotBlank() && (firebaseEmail != null || savedLoggedIn)) {
                 _activeUserId.value = activeEmail
                 _isLoggedIn.value = true
+
+                // Sync & restore user data from Firebase Firestore
+                try {
+                    val remoteUser = firebaseRepository.fetchUserProfileFromFirestore(activeEmail)
+                    if (remoteUser != null) {
+                        repository.saveUserProfile(remoteUser)
+                        prefs.edit()
+                            .putString("user_username_$activeEmail", remoteUser.username)
+                            .putString("user_phone_$activeEmail", remoteUser.phone)
+                            .putString("user_uid_$activeEmail", remoteUser.gameUid)
+                            .putString("user_ign_$activeEmail", remoteUser.gameName)
+                            .putInt("user_coins_$activeEmail", remoteUser.coinBalance)
+                            .putString("user_referral_code_$activeEmail", remoteUser.referralCode)
+                            .apply()
+                    }
+                    val remoteBookings = firebaseRepository.fetchUserBookingsFromFirestore(activeEmail)
+                    remoteBookings.forEach { repository.updateBooking(it) }
+
+                    val remoteTxns = firebaseRepository.fetchUserTransactionsFromFirestore(activeEmail)
+                    remoteTxns.forEach { repository.insertTransaction(it) }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             } else {
                 _activeUserId.value = ""
                 _isLoggedIn.value = false
@@ -520,175 +547,194 @@ class TournamentViewModel(
         gameUid: String,
         gameName: String,
         password: String,
-        promoCode: String
+        promoCode: String,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
     ): Boolean {
         if (username.isBlank() || email.isBlank() || phone.isBlank() || gameUid.isBlank() || gameName.isBlank() || password.isBlank()) {
             viewModelScope.launch {
                 _eventFlow.emit(UIEvent.ShowMessage("Please fill in all required fields."))
             }
+            onResult(false, "Please fill in all required fields.")
             return false
         }
-
-        val emails = prefs.getStringSet("registered_emails", emptySet())?.toMutableSet() ?: mutableSetOf()
-        if (emails.contains(email)) {
-            viewModelScope.launch {
-                _eventFlow.emit(UIEvent.ShowMessage("Email is already registered. Please login."))
-            }
-            return false
-        }
-
-        // Determine if there is a valid referral code from another user
-        var referrerEmail: String? = null
-        val trimmedPromo = promoCode.trim()
-        if (trimmedPromo.isNotBlank()) {
-            for (e in emails) {
-                val refCode = prefs.getString("user_referral_code_$e", "") ?: ""
-                if (refCode.isNotBlank() && refCode.equals(trimmedPromo, ignoreCase = true)) {
-                    referrerEmail = e
-                    break
-                }
-            }
-        }
-
-        // 5 Coins sign-up bonus if referred by a valid code, otherwise standard initial balance (0)
-        // plus optionally random promo coins if they used some other system promo code
-        val baseCoins = 0
-        val referralBonus = if (referrerEmail != null) 5 else 0
-        val systemPromoBonus = if (referrerEmail == null && promoCode.isNotBlank()) (5..10).random() else 0
-        val initialCoins = baseCoins + referralBonus + systemPromoBonus
-
-        // Generate unique referral code for this new user
-        val generatedCode = "BR-${username.uppercase().filter { it.isLetterOrDigit() }.take(5)}-${(100..999).random()}"
-
-        emails.add(email)
-        prefs.edit()
-            .putStringSet("registered_emails", emails)
-            .putString("user_password_$email", password)
-            .putString("user_username_$email", username)
-            .putString("user_phone_$email", phone)
-            .putString("user_uid_$email", gameUid)
-            .putString("user_ign_$email", gameName)
-            .putString("user_promo_$email", promoCode)
-            .putInt("user_coins_$email", initialCoins)
-            .putBoolean("user_first_login_$email", true)
-            .putString("user_referral_code_$email", generatedCode)
-            .putInt("total_referral_earnings_$email", 0)
-            .putString("referred_by_$email", referrerEmail ?: "")
-            .putBoolean("referral_rewarded_$email", false)
-            .putLong("user_joined_at_$email", System.currentTimeMillis())
-            .apply()
-
-        refreshRegisteredUsers()
 
         viewModelScope.launch {
-            if (referrerEmail != null) {
-                _eventFlow.emit(UIEvent.ShowMessage("Account created! 5 Coins Referral Bonus credited! Please Login."))
-            } else if (promoCode.isNotBlank()) {
-                _eventFlow.emit(UIEvent.ShowMessage("Account created with $systemPromoBonus Coins Promo! Please Login."))
+            val cleanEmail = email.trim().lowercase()
+            val emails = prefs.getStringSet("registered_emails", emptySet())?.toMutableSet() ?: mutableSetOf()
+
+            var referrerEmail: String? = null
+            val trimmedPromo = promoCode.trim()
+            if (trimmedPromo.isNotBlank()) {
+                for (e in emails) {
+                    val refCode = prefs.getString("user_referral_code_$e", "") ?: ""
+                    if (refCode.isNotBlank() && refCode.equals(trimmedPromo, ignoreCase = true)) {
+                        referrerEmail = e
+                        break
+                    }
+                }
+            }
+
+            val baseCoins = 0
+            val referralBonus = if (referrerEmail != null) 5 else 0
+            val systemPromoBonus = if (referrerEmail == null && promoCode.isNotBlank()) (5..10).random() else 0
+            val initialCoins = baseCoins + referralBonus + systemPromoBonus
+
+            val generatedCode = "BR-${username.uppercase().filter { it.isLetterOrDigit() }.take(5)}-${(100..999).random()}"
+
+            val newUserProfile = User(
+                id = cleanEmail,
+                email = cleanEmail,
+                username = username.trim(),
+                phone = phone.trim(),
+                gameUid = gameUid.trim(),
+                gameName = gameName.trim(),
+                coinBalance = initialCoins,
+                promoCode = promoCode.trim(),
+                referralCode = generatedCode,
+                referredByCode = referrerEmail ?: "",
+                joinedAtMillis = System.currentTimeMillis()
+            )
+
+            // Save to Firebase Auth + Cloud Firestore
+            val fbResult = firebaseRepository.signUpWithFirebase(cleanEmail, password, newUserProfile)
+
+            if (fbResult.isSuccess || !firebaseRepository.isFirebaseAvailable) {
+                emails.add(cleanEmail)
+                prefs.edit()
+                    .putStringSet("registered_emails", emails)
+                    .putString("user_password_$cleanEmail", password)
+                    .putString("user_username_$cleanEmail", username)
+                    .putString("user_phone_$cleanEmail", phone)
+                    .putString("user_uid_$cleanEmail", gameUid)
+                    .putString("user_ign_$cleanEmail", gameName)
+                    .putString("user_promo_$cleanEmail", promoCode)
+                    .putInt("user_coins_$cleanEmail", initialCoins)
+                    .putBoolean("user_first_login_$cleanEmail", true)
+                    .putString("user_referral_code_$cleanEmail", generatedCode)
+                    .putInt("total_referral_earnings_$cleanEmail", 0)
+                    .putString("referred_by_$cleanEmail", referrerEmail ?: "")
+                    .putBoolean("referral_rewarded_$cleanEmail", false)
+                    .putLong("user_joined_at_$cleanEmail", System.currentTimeMillis())
+                    .apply()
+
+                repository.saveUserProfile(newUserProfile)
+                refreshRegisteredUsers()
+
+                val msg = if (referrerEmail != null) {
+                    "Account created online! 5 Coins Referral Bonus credited! Please Login."
+                } else if (promoCode.isNotBlank()) {
+                    "Account created online with $systemPromoBonus Coins Promo! Please Login."
+                } else {
+                    "Registration Successful! Account saved in Firebase Firestore. Please Login."
+                }
+                _eventFlow.emit(UIEvent.ShowMessage(msg))
+                onResult(true, msg)
             } else {
-                _eventFlow.emit(UIEvent.ShowMessage("Registration Successful! Please Login to continue."))
+                val errorMsg = fbResult.exceptionOrNull()?.message ?: "Firebase Registration failed."
+                _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
+                onResult(false, errorMsg)
             }
         }
         return true
     }
 
-    fun loginWithEmailAndPassword(email: String, password: String): Boolean {
+    fun loginWithEmailAndPassword(
+        email: String,
+        password: String,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ): Boolean {
         if (email.isBlank() || password.isBlank()) {
             viewModelScope.launch {
                 _eventFlow.emit(UIEvent.ShowMessage("Please enter email and password."))
             }
+            onResult(false, "Please enter email and password.")
             return false
         }
-
-        val emails = prefs.getStringSet("registered_emails", emptySet()) ?: emptySet()
-        if (!emails.contains(email)) {
-            viewModelScope.launch {
-                _eventFlow.emit(UIEvent.ShowMessage("Account not found. Please Sign Up first."))
-            }
-            return false
-        }
-
-        val savedPassword = prefs.getString("user_password_$email", "")
-        if (savedPassword != password) {
-            viewModelScope.launch {
-                _eventFlow.emit(UIEvent.ShowMessage("Incorrect password. Please try again."))
-            }
-            return false
-        }
-
-        val isFirstLogin = prefs.getBoolean("user_first_login_$email", true)
-
-        prefs.edit()
-            .putBoolean("is_logged_in", true)
-            .putString("active_email", email)
-            .putBoolean("user_first_login_$email", false)
-            .apply()
-
-        _activeUserId.value = email
-        _isLoggedIn.value = true
-
-        val username = prefs.getString("user_username_$email", "") ?: ""
-        val phone = prefs.getString("user_phone_$email", "") ?: ""
-        val gameUid = prefs.getString("user_uid_$email", "") ?: ""
-        val gameName = prefs.getString("user_ign_$email", "") ?: ""
-        val promoCode = prefs.getString("user_promo_$email", "") ?: ""
-        val coinBalance = prefs.getInt("user_coins_$email", 1000)
-
-        // Generate unique referral code on login if missing
-        var myReferralCode = prefs.getString("user_referral_code_$email", "") ?: ""
-        if (myReferralCode.isBlank()) {
-            myReferralCode = "BR-${username.uppercase().filter { it.isLetterOrDigit() }.take(5)}-${(100..999).random()}"
-            prefs.edit().putString("user_referral_code_$email", myReferralCode).apply()
-        }
-        val totalEarned = prefs.getInt("total_referral_earnings_$email", 0)
-        val referredBy = prefs.getString("referred_by_$email", "") ?: ""
 
         viewModelScope.launch {
-            val currentUser = repository.getUser(email).firstOrNull() ?: User(id = email)
-            val updatedUser = currentUser.copy(
-                id = email,
-                email = email,
-                gameName = gameName,
-                gameUid = gameUid,
-                username = username,
-                phone = phone,
-                promoCode = promoCode,
-                coinBalance = coinBalance,
-                referralCode = myReferralCode,
-                referredByCode = referredBy,
-                totalEarnedReferrals = totalEarned
-            )
-            repository.saveUserProfile(updatedUser)
+            val cleanEmail = email.trim().lowercase()
 
-            if (isFirstLogin) {
-                // If they were referred, we create a custom Referral SignUp Bonus transaction!
-                if (referredBy.isNotBlank()) {
-                    val txn = WalletTransaction(
-                        type = "DEPOSIT",
-                        amount = 5,
-                        paymentMethod = "Referral Bonus",
-                        accountDetail = "Sign-up Bonus",
-                        status = "SUCCESS",
-                        transactionRef = "REF" + (100000..999999).random()
-                    )
-                    repository.insertTransaction(txn)
-                } else if (promoCode.isNotBlank()) {
-                    val txn = WalletTransaction(
-                        type = "DEPOSIT",
-                        amount = coinBalance - 1000,
-                        paymentMethod = "Promo Code",
-                        accountDetail = promoCode,
-                        status = "SUCCESS",
-                        transactionRef = "PROMO" + (100000..999999).random()
-                    )
-                    repository.insertTransaction(txn)
+            // 1. Attempt Firebase Auth + Cloud Firestore Restoration
+            val fbResult = firebaseRepository.signInWithFirebase(cleanEmail, password)
+
+            if (fbResult.isSuccess) {
+                val restoredUser = fbResult.getOrNull() ?: User(id = cleanEmail, email = cleanEmail)
+
+                // Save restored user profile to Room DB
+                repository.saveUserProfile(restoredUser)
+
+                // Update local preferences to match restored cloud profile
+                prefs.edit()
+                    .putBoolean("is_logged_in", true)
+                    .putString("active_email", cleanEmail)
+                    .putString("user_username_$cleanEmail", restoredUser.username)
+                    .putString("user_phone_$cleanEmail", restoredUser.phone)
+                    .putString("user_uid_$cleanEmail", restoredUser.gameUid)
+                    .putString("user_ign_$cleanEmail", restoredUser.gameName)
+                    .putInt("user_coins_$cleanEmail", restoredUser.coinBalance)
+                    .putString("user_referral_code_$cleanEmail", restoredUser.referralCode)
+                    .apply()
+
+                // Fetch and sync bookings & transactions from Firestore
+                val remoteBookings = firebaseRepository.fetchUserBookingsFromFirestore(cleanEmail)
+                remoteBookings.forEach { repository.updateBooking(it) }
+
+                val remoteTxns = firebaseRepository.fetchUserTransactionsFromFirestore(cleanEmail)
+                remoteTxns.forEach { repository.insertTransaction(it) }
+
+                _activeUserId.value = cleanEmail
+                _isLoggedIn.value = true
+
+                val welcomeMsg = "Welcome back, ${restoredUser.gameName.ifBlank { restoredUser.username }}! Balance: ${restoredUser.coinBalance} Coins restored from Firestore."
+                _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
+                onResult(true, welcomeMsg)
+            } else {
+                // 2. Fallback to local check if Firebase Auth is unconfigured or device is offline
+                val emails = prefs.getStringSet("registered_emails", emptySet()) ?: emptySet()
+                val savedPassword = prefs.getString("user_password_$cleanEmail", "")
+
+                if (emails.contains(cleanEmail) && savedPassword == password) {
+                    prefs.edit()
+                        .putBoolean("is_logged_in", true)
+                        .putString("active_email", cleanEmail)
+                        .apply()
+
+                    _activeUserId.value = cleanEmail
+                    _isLoggedIn.value = true
+
+                    val localUser = repository.getUser(cleanEmail).firstOrNull() ?: User(id = cleanEmail)
+                    val welcomeMsg = "Welcome back, ${localUser.gameName.ifBlank { cleanEmail }}!"
+                    _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
+                    onResult(true, welcomeMsg)
+                } else {
+                    val err = fbResult.exceptionOrNull()?.message ?: "Invalid email or password."
+                    _eventFlow.emit(UIEvent.ShowMessage(err))
+                    onResult(false, err)
                 }
             }
-
-            _eventFlow.emit(UIEvent.ShowMessage("Welcome back, $gameName!"))
         }
 
         return true
+    }
+
+    fun sendPasswordResetEmail(email: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val cleanEmail = email.trim().lowercase()
+            if (cleanEmail.isBlank()) {
+                onResult(false, "Please enter your registered email address.")
+                return@launch
+            }
+            val result = firebaseRepository.sendPasswordReset(cleanEmail)
+            if (result.isSuccess) {
+                val msg = "Password reset email sent to $cleanEmail! Check your inbox."
+                _eventFlow.emit(UIEvent.ShowMessage(msg))
+                onResult(true, msg)
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Failed to send password reset email."
+                _eventFlow.emit(UIEvent.ShowMessage(err))
+                onResult(false, err)
+            }
+        }
     }
 
     fun isUidRegistered(uid: String, currentEmail: String? = null): Boolean {
@@ -712,6 +758,7 @@ class TournamentViewModel(
 
     fun logout() {
         viewModelScope.launch {
+            firebaseRepository.signOut()
             prefs.edit()
                 .putBoolean("is_logged_in", false)
                 .remove("active_email")

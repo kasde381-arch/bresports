@@ -91,6 +91,9 @@ fun LoginScreen(
 
     // Error message display
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
+    var resetEmailInput by remember { mutableStateOf("") }
+    var isSendingReset by remember { mutableStateOf(false) }
 
     // Pulsing animation for aesthetic glow
     val infiniteTransition = rememberInfiniteTransition(label = "glow")
@@ -289,8 +292,30 @@ fun LoginScreen(
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 20.dp)
+                                .padding(bottom = 8.dp)
                         )
+
+                        // Forgot Password Link
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    resetEmailInput = loginEmail
+                                    showForgotPasswordDialog = true
+                                }
+                            ) {
+                                Text(
+                                    text = "Forgot Password?",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FireOrange
+                                )
+                            }
+                        }
 
                         // Sign In Submit Button
                         Button(
@@ -298,12 +323,17 @@ fun LoginScreen(
                                 if (loginEmail.isBlank() || loginPassword.isBlank()) {
                                     errorMessage = "Please enter both Email and Password"
                                 } else {
-                                    val success = viewModel.loginWithEmailAndPassword(loginEmail, loginPassword)
-                                    if (!success) {
-                                        errorMessage = "Invalid credentials. Please Sign Up if you don't have an account."
+                                    isAuthenticating = true
+                                    errorMessage = null
+                                    viewModel.loginWithEmailAndPassword(loginEmail, loginPassword) { success, msg ->
+                                        isAuthenticating = false
+                                        if (!success) {
+                                            errorMessage = msg
+                                        }
                                     }
                                 }
                             },
+                            enabled = !isAuthenticating,
                             colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
@@ -311,12 +341,20 @@ fun LoginScreen(
                                 .height(48.dp)
                                 .testTag("email_login_button")
                         ) {
-                            Text(
-                                text = "LOGIN TO BR ESPORTS",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
+                            if (isAuthenticating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = "LOGIN TO BR ESPORTS",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
                         }
 
                         // Divider OR
@@ -637,7 +675,9 @@ fun LoginScreen(
                                 } else if (viewModel.isUidRegistered(signUpGameUid)) {
                                     errorMessage = "This Free Fire UID is already linked to another account."
                                 } else {
-                                    val success = viewModel.registerUser(
+                                    isAuthenticating = true
+                                    errorMessage = null
+                                    viewModel.registerUser(
                                         username = signUpUsername,
                                         email = signUpEmail,
                                         phone = signUpPhone,
@@ -645,25 +685,28 @@ fun LoginScreen(
                                         gameName = signUpGameName,
                                         password = signUpPassword,
                                         promoCode = signUpPromoCode
-                                    )
-                                    if (success) {
-                                        loginEmail = signUpEmail
-                                        loginPassword = ""
-                                        loginState = LoginState.SIGN_IN
-                                        errorMessage = null
-                                        signUpUsername = ""
-                                        signUpEmail = ""
-                                        signUpPhone = ""
-                                        signUpGameUid = ""
-                                        signUpGameName = ""
-                                        signUpPassword = ""
-                                        signUpPromoCode = ""
-                                        isPhoneVerified = false
-                                    } else {
-                                        errorMessage = "Email is already registered. Try logging in instead."
+                                    ) { success, msg ->
+                                        isAuthenticating = false
+                                        if (success) {
+                                            loginEmail = signUpEmail
+                                            loginPassword = ""
+                                            loginState = LoginState.SIGN_IN
+                                            errorMessage = "Account Created Online in Firebase! Please login to continue."
+                                            signUpUsername = ""
+                                            signUpEmail = ""
+                                            signUpPhone = ""
+                                            signUpGameUid = ""
+                                            signUpGameName = ""
+                                            signUpPassword = ""
+                                            signUpPromoCode = ""
+                                            isPhoneVerified = false
+                                        } else {
+                                            errorMessage = msg
+                                        }
                                     }
                                 }
                             },
+                            enabled = !isAuthenticating,
                             colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
@@ -671,12 +714,20 @@ fun LoginScreen(
                                 .height(48.dp)
                                 .testTag("email_signup_button")
                         ) {
-                            Text(
-                                text = "REGISTER & SECURE PROFILE",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
+                            if (isAuthenticating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = "REGISTER & SECURE PROFILE",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(20.dp))
@@ -971,6 +1022,64 @@ fun LoginScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showVerificationDialog = false }) {
+                        Text("Cancel", color = TextSecondary)
+                    }
+                },
+                containerColor = SlateDarkSurface
+            )
+        }
+
+        if (showForgotPasswordDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!isSendingReset) showForgotPasswordDialog = false },
+                title = {
+                    Text("Reset Password via Firebase", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                },
+                text = {
+                    Column {
+                        Text(
+                            "Enter your registered email address below. Firebase Auth will send you a password reset link:",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        OutlinedTextField(
+                            value = resetEmailInput,
+                            onValueChange = { resetEmailInput = it },
+                            label = { Text("Email Address") },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = FireOrange,
+                                unfocusedBorderColor = SlateDarkBorder
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (resetEmailInput.isBlank()) return@Button
+                            isSendingReset = true
+                            viewModel.sendPasswordResetEmail(resetEmailInput) { _, _ ->
+                                isSendingReset = false
+                                showForgotPasswordDialog = false
+                            }
+                        },
+                        enabled = !isSendingReset,
+                        colors = ButtonDefaults.buttonColors(containerColor = FireOrange)
+                    ) {
+                        if (isSendingReset) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text("Send Reset Link", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showForgotPasswordDialog = false }) {
                         Text("Cancel", color = TextSecondary)
                     }
                 },
