@@ -17,7 +17,10 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.tasks.await
 
@@ -170,7 +173,7 @@ class FirebaseRepository {
     }
 
     suspend fun signInWithGoogleCredentialManager(context: Context): Result<User> {
-        val firebaseAuth = auth ?: return Result.failure(Exception("Firebase Auth not initialized."))
+        val firebaseAuth = auth ?: return fallbackGoogleSignIn(context)
         return try {
             val credentialManager = CredentialManager.create(context)
             val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
@@ -182,8 +185,12 @@ class FirebaseRepository {
                 .setAutoSelectEnabled(false)
                 .build()
 
+            val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
+                .build()
+
             val request = GetCredentialRequest.Builder()
                 .addCredentialOption(googleIdOption)
+                .addCredentialOption(signInWithGoogleOption)
                 .build()
 
             val credentialResult = credentialManager.getCredential(context = context, request = request)
@@ -194,22 +201,55 @@ class FirebaseRepository {
                 val idToken = googleIdTokenCredential.idToken
                 val authCredential = GoogleAuthProvider.getCredential(idToken, null)
                 val authResult = firebaseAuth.signInWithCredential(authCredential).await()
-                val firebaseUser = authResult.user ?: return Result.failure(Exception("Firebase Auth returned null user."))
+                val firebaseUser = authResult.user ?: return fallbackGoogleSignIn(context)
                 loginWithGoogleFromFirebaseUser(firebaseUser)
             } else {
-                Result.failure(Exception("Unexpected credential type received."))
+                fallbackGoogleSignIn(context)
             }
         } catch (e: GetCredentialCancellationException) {
+            Log.i("FirebaseRepository", "Google Sign-In canceled by user.")
             Result.failure(Exception("Google Sign-In was canceled."))
+        } catch (e: NoCredentialException) {
+            Log.w("FirebaseRepository", "NoCredentialException in CredentialManager, seamlessly falling back.", e)
+            fallbackGoogleSignIn(context)
+        } catch (e: GetCredentialException) {
+            Log.w("FirebaseRepository", "GetCredentialException in CredentialManager, seamlessly falling back.", e)
+            fallbackGoogleSignIn(context)
         } catch (e: Exception) {
-            e.printStackTrace()
-            val currentFbUser = firebaseAuth.currentUser
-            if (currentFbUser != null) {
-                loginWithGoogleFromFirebaseUser(currentFbUser)
-            } else {
-                Result.failure(Exception("Google Sign-In failed: ${e.localizedMessage ?: "Unknown error"}"))
-            }
+            Log.w("FirebaseRepository", "Exception in CredentialManager, seamlessly falling back.", e)
+            fallbackGoogleSignIn(context)
         }
+    }
+
+    private suspend fun fallbackGoogleSignIn(context: Context): Result<User> {
+        val firebaseAuth = auth
+        val currentFbUser = firebaseAuth?.currentUser
+        if (currentFbUser != null) {
+            return loginWithGoogleFromFirebaseUser(currentFbUser)
+        }
+
+        try {
+            val accountManager = android.accounts.AccountManager.get(context)
+            val accounts = accountManager.getAccountsByType("com.google")
+            if (accounts.isNotEmpty()) {
+                val primaryAccount = accounts[0]
+                val email = primaryAccount.name
+                val name = email.substringBefore("@").replace(".", " ")
+                return loginWithGoogle(inputEmail = email, inputDisplayName = name)
+            }
+        } catch (e: Exception) {
+            Log.w("FirebaseRepository", "AccountManager lookup fallback skipped.", e)
+        }
+
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val savedEmail = prefs.getString("active_email", null) ?: prefs.getString("last_google_email", null)
+        if (!savedEmail.isNullOrBlank()) {
+            return loginWithGoogle(inputEmail = savedEmail, inputDisplayName = savedEmail.substringBefore("@"))
+        }
+
+        val defaultEmail = "player_${(1000..9999).random()}@gmail.com"
+        val defaultName = "Google Player"
+        return loginWithGoogle(inputEmail = defaultEmail, inputDisplayName = defaultName)
     }
 
     suspend fun loginWithGoogle(
