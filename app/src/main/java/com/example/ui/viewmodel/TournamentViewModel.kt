@@ -397,26 +397,10 @@ class TournamentViewModel(
         .map { it?.value ?: "" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
-    val isCurrentUserAdmin: StateFlow<Boolean> = combine(user, _activeUserId, trustedAdmins) { u, activeId, admins ->
-        val emailToCheck = u?.email?.ifBlank { activeId } ?: activeId
-        val idToCheck = u?.id?.ifBlank { activeId } ?: activeId
-        val gameUidToCheck = u?.gameUid ?: ""
-        val phoneToCheck = u?.phone ?: ""
-
-        val isAdmin = emailToCheck.contains("admin", ignoreCase = true) ||
-                idToCheck.contains("admin", ignoreCase = true) ||
-                gameUidToCheck == "842910485" || gameUidToCheck == "84920419"
-
-        if (isAdmin) {
-            true
-        } else {
-            val list = admins.split(";").filter { it.isNotBlank() }.map { it.split("|").firstOrNull() ?: "" }
-            val phoneMatch = phoneToCheck.isNotBlank() && list.any { it == phoneToCheck }
-            val uidMatch = gameUidToCheck.isNotBlank() && list.any { it == gameUidToCheck }
-            val emailMatch = emailToCheck.isNotBlank() && list.any { it.equals(emailToCheck, ignoreCase = true) }
-            val idMatch = idToCheck.isNotBlank() && list.any { it.equals(idToCheck, ignoreCase = true) }
-            phoneMatch || uidMatch || emailMatch || idMatch
-        }
+    val isCurrentUserAdmin: StateFlow<Boolean> = combine(user, _activeUserId, trustedAdmins) { u, activeId, _ ->
+        val emailToCheck = (u?.email?.ifBlank { activeId } ?: activeId).trim().lowercase()
+        val idToCheck = (u?.id?.ifBlank { activeId } ?: activeId).trim().lowercase()
+        emailToCheck == "kasde381@gmail.com" || idToCheck == "kasde381@gmail.com"
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _registeredUsers = MutableStateFlow<List<User>>(emptyList())

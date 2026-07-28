@@ -247,9 +247,7 @@ class FirebaseRepository {
             return loginWithGoogle(inputEmail = savedEmail, inputDisplayName = savedEmail.substringBefore("@"))
         }
 
-        val defaultEmail = "player_${(1000..9999).random()}@gmail.com"
-        val defaultName = "Google Player"
-        return loginWithGoogle(inputEmail = defaultEmail, inputDisplayName = defaultName)
+        return Result.failure(Exception("No Google account found on device. Please add a Google account in Android settings or sign in with email."))
     }
 
     suspend fun loginWithGoogle(
