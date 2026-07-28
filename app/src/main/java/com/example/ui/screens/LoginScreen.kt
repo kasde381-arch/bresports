@@ -63,9 +63,6 @@ fun LoginScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var loginState by remember { mutableStateOf(LoginState.SIGN_IN) }
-    
-    // Auth bottom sheet simulation
-    var showOneTapSheet by remember { mutableStateOf(false) }
     var isAuthenticating by remember { mutableStateOf(false) }
 
     // Login Form State
@@ -377,7 +374,17 @@ fun LoginScreen(
 
                         // Google Sign In Option
                         Button(
-                            onClick = { showOneTapSheet = true },
+                            onClick = {
+                                isAuthenticating = true
+                                errorMessage = null
+                                viewModel.signInWithGoogle(context) { success, msg ->
+                                    isAuthenticating = false
+                                    if (!success) {
+                                        errorMessage = msg
+                                    }
+                                }
+                            },
+                            enabled = !isAuthenticating,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.White,
                                 contentColor = Color(0xFF1F1F1F)
@@ -389,18 +396,26 @@ fun LoginScreen(
                                 .height(50.dp)
                                 .testTag("google_signin_button")
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                GoogleLogoRing(modifier = Modifier.padding(end = 12.dp))
-                                Text(
-                                    text = "Sign in with Google",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1F1F1F)
+                            if (isAuthenticating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color(0xFF1A73E8),
+                                    strokeWidth = 2.dp
                                 )
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    GoogleLogoRing(modifier = Modifier.padding(end = 12.dp))
+                                    Text(
+                                        text = "Sign in with Google",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1F1F1F)
+                                    )
+                                }
                             }
                         }
 
@@ -758,214 +773,6 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
-        }
-
-        // --- Simulated Google One-Tap Bottom Sheet Overlay ---
-        if (showOneTapSheet) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable { 
-                        if (!isAuthenticating) showOneTapSheet = false 
-                    }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .clickable(enabled = false) {} // Prevent click-through
-                ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(horizontal = 24.dp, vertical = 20.dp)
-                        ) {
-                            // Header: Google Sign-In Branding
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    GoogleLogoRing(modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Google",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1F1F1F)
-                                    )
-                                }
-                                if (!isAuthenticating) {
-                                    TextButton(onClick = { showOneTapSheet = false }) {
-                                        Text("Cancel", color = Color(0xFF1A73E8), fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Text(
-                                text = "Sign in to BR Esports",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF1F1F1F)
-                            )
-                            Text(
-                                text = "To continue, Google will share your name, email address, and profile picture.",
-                                fontSize = 12.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
-                            )
-
-                            if (isAuthenticating) {
-                                // Loader and Verification State
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = Color(0xFF1A73E8),
-                                        strokeWidth = 3.dp,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "Connecting securely with Google...",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF1F1F1F)
-                                    )
-                                }
-                            } else {
-                                // Primary Google Account One-Tap Button/Row (Customized with User's actual details)
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            coroutineScope.launch {
-                                                isAuthenticating = true
-                                                delay(1500) // Simulating authentication processing
-                                                viewModel.loginWithGoogle(
-                                                    email = "kasde381@gmail.com",
-                                                    displayName = "Anil Kasde"
-                                                )
-                                                showOneTapSheet = false
-                                                isAuthenticating = false
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        // Avatar badge with a modern gradient
-                                        Box(
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .clip(CircleShape)
-                                                .background(Brush.radialGradient(listOf(Color(0xFFE8F0FE), Color(0xFFD2E3FC)))),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "A",
-                                                fontSize = 18.sp,
-                                                fontWeight = FontWeight.Black,
-                                                color = Color(0xFF1A73E8)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(16.dp))
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Anil Kasde",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1F1F1F)
-                                            )
-                                            Text(
-                                                text = "kasde381@gmail.com",
-                                                fontSize = 12.sp,
-                                                color = Color.Gray
-                                            )
-                                        }
-
-                                        Icon(
-                                            imageVector = Icons.Default.ChevronRight,
-                                            contentDescription = "Select",
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                // Use Another Account Option
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            // Handle other account selection as well
-                                            coroutineScope.launch {
-                                                isAuthenticating = true
-                                                delay(1500)
-                                                viewModel.loginWithGoogle(
-                                                    email = "player.pro@gmail.com",
-                                                    displayName = "Pro Gamer"
-                                                )
-                                                showOneTapSheet = false
-                                                isAuthenticating = false
-                                            }
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFE8EAED)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Gamepad,
-                                            contentDescription = null,
-                                            tint = Color.Gray,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = "Use another game account",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF1F1F1F)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         if (showVerificationDialog) {

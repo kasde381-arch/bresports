@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.Booking
+import com.example.data.model.DepositRequest
 import com.example.data.model.Match
 import com.example.data.model.User
 import com.example.data.model.WalletTransaction
@@ -258,6 +259,14 @@ class TournamentViewModel(
                 _isLoggedIn.value = false
             }
             _isAuthChecking.value = false
+
+            // Real-time periodic polling loop to keep user wallet balance & transaction history updated instantly
+            while (true) {
+                kotlinx.coroutines.delay(4000)
+                if (_isLoggedIn.value && _activeUserId.value.isNotBlank()) {
+                    syncUserDataAndTransactions()
+                }
+            }
         }
     }
 
@@ -394,9 +403,7 @@ class TournamentViewModel(
         val gameUidToCheck = u?.gameUid ?: ""
         val phoneToCheck = u?.phone ?: ""
 
-        val isAdmin = emailToCheck.equals("kasde381@gmail.com", ignoreCase = true) ||
-                emailToCheck.contains("admin", ignoreCase = true) ||
-                idToCheck.equals("kasde381@gmail.com", ignoreCase = true) ||
+        val isAdmin = emailToCheck.contains("admin", ignoreCase = true) ||
                 idToCheck.contains("admin", ignoreCase = true) ||
                 gameUidToCheck == "842910485" || gameUidToCheck == "84920419"
 
@@ -443,11 +450,7 @@ class TournamentViewModel(
                     referralCode = referralCode,
                     referredByCode = referredBy,
                     totalEarnedReferrals = totalEarned,
-                    joinedAtMillis = if (joinedAt == 0L) {
-                        // fallback for old users: default date from 3-4 days ago
-                        if (email == "kasde381@gmail.com") System.currentTimeMillis() - 4 * 24 * 3600 * 1000L
-                        else System.currentTimeMillis()
-                    } else joinedAt
+                    joinedAtMillis = if (joinedAt == 0L) System.currentTimeMillis() else joinedAt
                 )
             )
         }
@@ -517,26 +520,80 @@ class TournamentViewModel(
     val allSupportMessages: StateFlow<List<SupportMessage>> = repository.allSupportMessages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun loginWithGoogle(email: String, displayName: String) {
+    fun signInWithGoogle(
+        context: Context,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ) {
         viewModelScope.launch {
-            prefs.edit()
-                .putBoolean("is_logged_in", true)
-                .putString("active_email", email)
-                .apply()
-            _activeUserId.value = email
-            _isLoggedIn.value = true
+            val result = firebaseRepository.signInWithGoogleCredentialManager(context)
+            if (result.isSuccess) {
+                val googleUser = result.getOrThrow()
+                val activeEmail = googleUser.email.ifBlank { googleUser.id }
 
-            // Update user profile
-            val currentUser = repository.getUser(email).firstOrNull() ?: User(id = email)
-            val updatedUser = currentUser.copy(
-                id = email,
-                email = email,
-                gameName = if (displayName.isNotBlank()) displayName else currentUser.gameName.ifBlank { "BOOYAH_SLAYER" },
-                gameUid = if (currentUser.gameUid.isEmpty()) "842910485" else currentUser.gameUid,
-                username = if (displayName.isNotBlank()) displayName.replace(" ", "_").lowercase() else "booyah_slayer"
-            )
-            repository.saveUserProfile(updatedUser)
-            _eventFlow.emit(UIEvent.ShowMessage("Successfully signed in as ${updatedUser.username}"))
+                // Save to Room database
+                repository.saveUserProfile(googleUser)
+
+                prefs.edit()
+                    .putBoolean("is_logged_in", true)
+                    .putString("active_email", activeEmail)
+                    .putString("user_username_$activeEmail", googleUser.username)
+                    .putString("user_phone_$activeEmail", googleUser.phone)
+                    .putString("user_uid_$activeEmail", googleUser.gameUid)
+                    .putString("user_ign_$activeEmail", googleUser.gameName)
+                    .putInt("user_coins_$activeEmail", googleUser.coinBalance)
+                    .putString("user_referral_code_$activeEmail", googleUser.referralCode)
+                    .apply()
+
+                _activeUserId.value = activeEmail
+                _isLoggedIn.value = true
+
+                val welcomeMsg = "Signed in with Google as ${googleUser.gameName.ifBlank { googleUser.username }}!"
+                _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
+                onResult(true, welcomeMsg)
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Google Authentication failed."
+                _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
+                onResult(false, errorMsg)
+            }
+        }
+    }
+
+    fun loginWithGoogle(
+        email: String? = null,
+        displayName: String? = null,
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val result = firebaseRepository.loginWithGoogle(email, displayName)
+            if (result.isSuccess) {
+                val googleUser = result.getOrThrow()
+                val activeEmail = googleUser.email.ifBlank { googleUser.id }
+
+                // Save to Room database
+                repository.saveUserProfile(googleUser)
+
+                prefs.edit()
+                    .putBoolean("is_logged_in", true)
+                    .putString("active_email", activeEmail)
+                    .putString("user_username_$activeEmail", googleUser.username)
+                    .putString("user_phone_$activeEmail", googleUser.phone)
+                    .putString("user_uid_$activeEmail", googleUser.gameUid)
+                    .putString("user_ign_$activeEmail", googleUser.gameName)
+                    .putInt("user_coins_$activeEmail", googleUser.coinBalance)
+                    .putString("user_referral_code_$activeEmail", googleUser.referralCode)
+                    .apply()
+
+                _activeUserId.value = activeEmail
+                _isLoggedIn.value = true
+
+                val welcomeMsg = "Signed in with Google as ${googleUser.gameName.ifBlank { googleUser.username }}!"
+                _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
+                onResult(true, welcomeMsg)
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Google Authentication failed."
+                _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
+                onResult(false, errorMsg)
+            }
         }
     }
 
@@ -829,21 +886,6 @@ class TournamentViewModel(
                 }
             }
 
-            if (!emails.contains("kasde381@gmail.com")) {
-                emails.add("kasde381@gmail.com")
-                prefs.edit()
-                    .putString("user_password_kasde381@gmail.com", "password")
-                    .putString("user_username_kasde381@gmail.com", "booyah_slayer")
-                    .putString("user_phone_kasde381@gmail.com", "9876543210")
-                    .putString("user_uid_kasde381@gmail.com", "842910485")
-                    .putString("user_ign_kasde381@gmail.com", "BOOYAH_SLAYER")
-                    .putInt("user_coins_kasde381@gmail.com", 1500)
-                    .putLong("user_joined_at_kasde381@gmail.com", System.currentTimeMillis() - 4 * 24 * 3600 * 1000L)
-                    .putString("user_referral_code_kasde381@gmail.com", "BR-SLAYE-485")
-                    .apply()
-                modified = true
-            }
-
             if (modified) {
                 prefs.edit().putStringSet("registered_emails", emails).apply()
             }
@@ -1129,21 +1171,164 @@ class TournamentViewModel(
         }
     }
 
-    fun depositViaQr(amount: Int, utr: String, senderUpi: String) {
+    private val _depositRequests = MutableStateFlow<List<DepositRequest>>(emptyList())
+    val depositRequests: StateFlow<List<DepositRequest>> = _depositRequests.asStateFlow()
+
+    fun fetchPendingDepositRequests() {
+        viewModelScope.launch {
+            try {
+                val requests = firebaseRepository.fetchDepositRequestsFromFirestore()
+                _depositRequests.value = requests.sortedByDescending { it.timestamp }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun submitDepositRequest(amount: Int, utrNumber: String) {
         viewModelScope.launch {
             val currentUserId = _activeUserId.value
+            val currentUser = user.value
+            val userName = currentUser?.gameName?.ifBlank { currentUser.username }?.ifBlank { currentUserId } ?: currentUserId
+
+            val request = DepositRequest(
+                userId = currentUserId,
+                userName = userName,
+                amount = amount,
+                utrNumber = utrNumber,
+                status = "PENDING",
+                timestamp = System.currentTimeMillis()
+            )
+
+            // 1. Save to Firestore deposit_requests collection
+            try {
+                firebaseRepository.saveDepositRequestToFirestore(request)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 2. Save transaction locally & to Firestore
             val txn = WalletTransaction(
                 userId = currentUserId,
                 type = "DEPOSIT",
                 amount = amount,
-                title = "Deposit Request",
-                paymentMethod = "UPI QR (Anil Kasde)",
-                accountDetail = "UPI: $senderUpi | UTR: $utr",
+                title = "Deposit Request (UTR: $utrNumber)",
+                paymentMethod = "UPI QR (anil612@fam)",
+                accountDetail = "UTR: $utrNumber",
                 status = "PENDING",
-                transactionRef = utr
+                transactionRef = utrNumber,
+                timestamp = System.currentTimeMillis()
             )
             repository.insertTransaction(txn)
-            _eventFlow.emit(UIEvent.ShowMessage("Payment submitted! UTR: $utr. Verification in progress. Awaiting Admin Approval."))
+            try {
+                firebaseRepository.saveTransactionToFirestore(txn)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            fetchPendingDepositRequests()
+
+            _eventFlow.emit(UIEvent.ShowMessage("Request submitted successfully! Waiting for Admin approval."))
+        }
+    }
+
+    fun depositViaQr(amount: Int, utr: String, senderUpi: String) {
+        submitDepositRequest(amount, utr)
+    }
+
+    fun syncUserDataAndTransactions() {
+        viewModelScope.launch {
+            val activeEmail = _activeUserId.value
+            if (activeEmail.isBlank()) return@launch
+            try {
+                val remoteUser = firebaseRepository.fetchUserProfileFromFirestore(activeEmail)
+                if (remoteUser != null) {
+                    repository.saveUserProfile(remoteUser)
+                    prefs.edit().putInt("user_coins_$activeEmail", remoteUser.coinBalance).apply()
+                }
+                val remoteTxns = firebaseRepository.fetchUserTransactionsFromFirestore(activeEmail)
+                remoteTxns.forEach { repository.insertTransaction(it) }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun approveDepositRequest(request: DepositRequest) {
+        viewModelScope.launch {
+            // Optimistically update deposit requests state so pending item disappears immediately from Admin Panel
+            _depositRequests.value = _depositRequests.value.filter {
+                it.id != request.id && (it.utrNumber.isBlank() || it.utrNumber != request.utrNumber)
+            }
+
+            // 1. Run full Firestore approval (deposit_requests status->SUCCESS, increment user balance, add/update transaction)
+            try {
+                firebaseRepository.approveDepositRequestInFirestore(request)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 2. Update local target user wallet balance in Room & SharedPreferences
+            val targetUserId = request.userId.trim()
+            val targetUser = repository.getUser(targetUserId).firstOrNull() ?: User(id = targetUserId)
+            val newBalance = targetUser.coinBalance + request.amount
+
+            val updatedUser = targetUser.copy(id = targetUserId, coinBalance = newBalance)
+            repository.saveUserProfile(updatedUser)
+            prefs.edit().putInt("user_coins_$targetUserId", newBalance).apply()
+
+            // 3. Update or Insert transaction in local Room database with status = SUCCESS
+            val matchingTxns = repository.getTransactionsForUser(targetUserId).firstOrNull() ?: emptyList()
+            val matchingTxn = matchingTxns.find { it.transactionRef == request.utrNumber }
+            if (matchingTxn != null) {
+                repository.insertTransaction(matchingTxn.copy(status = "SUCCESS", amount = request.amount))
+            } else {
+                val newTxn = WalletTransaction(
+                    userId = targetUserId,
+                    type = "DEPOSIT",
+                    amount = request.amount,
+                    title = "Deposit Request (+${request.amount} Coins)",
+                    paymentMethod = "UPI QR (anil612@fam)",
+                    accountDetail = "UTR: ${request.utrNumber}",
+                    status = "SUCCESS",
+                    transactionRef = request.utrNumber,
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.insertTransaction(newTxn)
+            }
+
+            refreshRegisteredUsers()
+            fetchPendingDepositRequests()
+            syncUserDataAndTransactions()
+
+            _eventFlow.emit(UIEvent.ShowMessage("Deposit APPROVED! ${request.amount} Coins credited to ${request.userName}."))
+        }
+    }
+
+    fun rejectDepositRequest(request: DepositRequest) {
+        viewModelScope.launch {
+            // Optimistically update deposit requests state so pending item disappears immediately from Admin Panel
+            _depositRequests.value = _depositRequests.value.filter {
+                it.id != request.id && (it.utrNumber.isBlank() || it.utrNumber != request.utrNumber)
+            }
+
+            try {
+                if (request.id.isNotBlank()) {
+                    firebaseRepository.updateDepositRequestStatusInFirestore(request.id, "REJECTED")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val targetUserId = request.userId.trim()
+            val matchingTxns = repository.getTransactionsForUser(targetUserId).firstOrNull() ?: emptyList()
+            val matchingTxn = matchingTxns.find { it.transactionRef == request.utrNumber && it.status == "PENDING" }
+            if (matchingTxn != null) {
+                repository.insertTransaction(matchingTxn.copy(status = "FAILED"))
+            }
+
+            fetchPendingDepositRequests()
+            _eventFlow.emit(UIEvent.ShowMessage("Deposit Request Rejected."))
         }
     }
 
@@ -1188,61 +1373,6 @@ class TournamentViewModel(
             } else if (finalStatus == "PENDING") {
                 _eventFlow.emit(UIEvent.ShowMessage("UPI Transaction Pending/Processing. Ref: $txnRef"))
             }
-        }
-    }
-
-    fun processRazorpayPaymentSuccess(paymentId: String, amount: Int) {
-        viewModelScope.launch {
-            val currentUserId = _activeUserId.value
-            val activeEmail = if (currentUserId.isNotBlank()) currentUserId else prefs.getString("active_email", "") ?: "local_user"
-            
-            val currentUser = repository.getUser(activeEmail).firstOrNull() ?: User(id = activeEmail)
-            val newBalance = currentUser.coinBalance + amount
-
-            val updatedUser = currentUser.copy(
-                id = activeEmail,
-                coinBalance = newBalance
-            )
-
-            // 1. Update local Room DB and SharedPreferences
-            repository.saveUserProfile(updatedUser)
-            prefs.edit().putInt("user_coins_$activeEmail", newBalance).apply()
-
-            // 2. Sync updated user profile to Cloud Firestore
-            try {
-                firebaseRepository.saveUserProfileToFirestore(updatedUser)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // 3. Create transaction log with Razorpay Payment ID
-            val txn = WalletTransaction(
-                userId = activeEmail,
-                type = "DEPOSIT",
-                amount = amount,
-                title = "Razorpay Deposit",
-                timestamp = System.currentTimeMillis(),
-                paymentMethod = "Razorpay Gateway",
-                accountDetail = "Payment ID: $paymentId",
-                status = "SUCCESS",
-                transactionRef = paymentId
-            )
-
-            // 4. Save transaction to local Room DB and Cloud Firestore
-            repository.insertTransaction(txn)
-            try {
-                firebaseRepository.saveTransactionToFirestore(txn)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            // 5. Refresh registered users list
-            refreshRegisteredUsers()
-
-            // 6. Notify UI instantly
-            _eventFlow.emit(
-                UIEvent.ShowMessage("🎉 Deposit Successful! $amount Coins added to your Wallet. Razorpay ID: $paymentId")
-            )
         }
     }
 

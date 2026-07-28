@@ -60,7 +60,8 @@ data class LeaderboardPlayer(
     val gameUid: String = "",
     val totalMatchesPlayed: Int = 0,
     val winRatePercent: Int = 0,
-    val history: List<MatchHistoryItem> = emptyList()
+    val history: List<MatchHistoryItem> = emptyList(),
+    val userId: String = ""
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,8 +78,22 @@ fun LeaderboardScreen(
 
     var leaderboardTab by remember { mutableStateOf(0) } // 0 = Coins Earned, 1 = Total Kills
     var selectedPlayerForHistory by remember { mutableStateOf<LeaderboardPlayer?>(null) }
+    var firestoreUsers by remember { mutableStateOf<List<com.example.data.model.User>>(emptyList()) }
+    var isLoadingUsers by remember { mutableStateOf(false) }
 
-    // Calculate real user stats
+    // Fetch real registered users strictly from Firestore
+    LaunchedEffect(Unit) {
+        isLoadingUsers = true
+        try {
+            val remoteUsers = viewModel.firebaseRepository.fetchAllRegisteredUsersFromFirestore()
+            firestoreUsers = remoteUsers
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        isLoadingUsers = false
+    }
+
+    // Calculate real local user stats
     val realWinnings = remember(transactions) {
         transactions.filter { txn ->
             txn.type == "DEPOSIT" && (
@@ -121,164 +136,75 @@ fun LeaderboardScreen(
         }
     }
 
-    val defaultPlayers = remember(currentUser, userBookings, realWinnings, realMatchHistoryList) {
-        val usernameText = currentUser?.username?.ifEmpty { "Gamer" } ?: "Gamer"
-        val userName = if (currentUser?.gameName.isNullOrBlank()) "You ($usernameText)" else currentUser!!.gameName
-        val userUid = if (currentUser?.gameUid.isNullOrBlank()) "UID: 84920419" else "UID: ${currentUser!!.gameUid}"
-        
-        val realUserKills = userBookings.size * 2 + (realWinnings / 20) // calculate realistic kills
-        val realUserPlayer = LeaderboardPlayer(
-            name = userName,
-            isLocalUser = true,
-            totalKills = if (userBookings.isNotEmpty()) realUserKills else 87,
-            totalCoinsEarned = if (realWinnings > 0) realWinnings else 4900,
-            avatarChar = if (userName.isNotEmpty()) userName[0].uppercase() else "Y",
-            status = PlayerStatus.ONLINE,
-            gameUid = userUid,
-            totalMatchesPlayed = if (userBookings.isNotEmpty()) userBookings.size else 14,
-            winRatePercent = if (userBookings.isNotEmpty()) ((userBookings.count { it.id % 2 == 0 } * 100) / userBookings.size.coerceAtLeast(1)) else 68,
-            history = if (realMatchHistoryList.isNotEmpty()) {
-                realMatchHistoryList
-            } else {
-                listOf(
-                    MatchHistoryItem("BERMUDA SOLO CONQUEST #24", "Solo", "21 Jul 2026, 08:00 PM", 6, 120, "VICTORY (BOOYAH!)", userName),
-                    MatchHistoryItem("CLASH SQUAD 4V4 SHOWDOWN", "4v4 CS", "20 Jul 2026, 06:30 PM", 8, 200, "VICTORY (BOOYAH!)", "SQUAD LEAD: $userName"),
-                    MatchHistoryItem("LONE WOLF 1V1 ONE TAP", "1v1 Lone Wolf", "19 Jul 2026, 04:00 PM", 5, 50, "COMPLETED", userName),
-                    MatchHistoryItem("PURGATORY SQUAD RUMBLE #18", "Squad", "18 Jul 2026, 09:00 PM", 3, 30, "COMPLETED", "TEAM ALPHA")
-                )
-            }
-        )
+    // Construct real players list strictly from Firestore & registered users
+    val realPlayersList = remember(currentUser, registeredUsers, firestoreUsers, userBookings, realWinnings, realMatchHistoryList) {
+        val userMap = mutableMapOf<String, com.example.data.model.User>()
 
-        listOf(
-            LeaderboardPlayer(
-                "〆BOOYAH_KING〆", false, 142, 8500, "B", PlayerStatus.PLAYING,
-                gameUid = "UID: 98124801", totalMatchesPlayed = 42, winRatePercent = 84,
-                history = listOf(
-                    MatchHistoryItem("BERMUDA PRO LEAGUE #50", "Solo", "22 Jul 2026, 05:00 PM", 12, 350, "VICTORY (BOOYAH!)", "〆BOOYAH_KING〆"),
-                    MatchHistoryItem("CS 4V4 CHAMPIONSHIP", "4v4 CS", "21 Jul 2026, 09:00 PM", 15, 400, "VICTORY (BOOYAH!)", "TEAM KING"),
-                    MatchHistoryItem("ONE TAP HEADSHOT DUEL", "1v1 Lone Wolf", "20 Jul 2026, 03:00 PM", 8, 100, "VICTORY (BOOYAH!)", "〆BOOYAH_KING〆")
-                )
-            ),
-            LeaderboardPlayer(
-                "Mortal_God", false, 128, 7200, "M", PlayerStatus.ONLINE,
-                gameUid = "UID: 77210941", totalMatchesPlayed = 38, winRatePercent = 78,
-                history = listOf(
-                    MatchHistoryItem("PURGATORY SQUAD MASTERS", "Squad", "21 Jul 2026, 08:00 PM", 9, 250, "VICTORY (BOOYAH!)", "MORTAL CLAN"),
-                    MatchHistoryItem("BERMUDA SOLO CUP #12", "Solo", "20 Jul 2026, 07:00 PM", 7, 140, "COMPLETED", "Mortal_God")
-                )
-            ),
-            LeaderboardPlayer(
-                "ALPHA_STRIKER", false, 115, 6400, "A", PlayerStatus.IN_LOBBY,
-                gameUid = "UID: 66103982", totalMatchesPlayed = 35, winRatePercent = 72,
-                history = listOf(
-                    MatchHistoryItem("KALAHARI BATTLE ROYALE", "Solo", "21 Jul 2026, 04:00 PM", 10, 200, "VICTORY (BOOYAH!)", "ALPHA_STRIKER"),
-                    MatchHistoryItem("CLASH SQUAD 4V4 NIGHT", "4v4 CS", "19 Jul 2026, 08:30 PM", 11, 280, "VICTORY (BOOYAH!)", "ALPHA SQUAD")
-                )
-            ),
-            LeaderboardPlayer(
-                "TSG_Slayer", false, 98, 5900, "T", PlayerStatus.PLAYING,
-                gameUid = "UID: 55490218", totalMatchesPlayed = 30, winRatePercent = 70,
-                history = listOf(
-                    MatchHistoryItem("BERMUDA MINI ZONE #09", "Solo", "21 Jul 2026, 02:00 PM", 8, 160, "VICTORY (BOOYAH!)", "TSG_Slayer")
-                )
-            ),
-            realUserPlayer,
-            LeaderboardPlayer(
-                "Aura_Esports", false, 76, 4200, "E", PlayerStatus.ONLINE,
-                gameUid = "UID: 44109823", totalMatchesPlayed = 24, winRatePercent = 65,
-                history = listOf(
-                    MatchHistoryItem("SQUAD SHOWDOWN #04", "Squad", "20 Jul 2026, 05:00 PM", 6, 120, "COMPLETED", "AURA CLAN")
-                )
-            ),
-            LeaderboardPlayer(
-                "BR_Raptor", false, 65, 3600, "R", PlayerStatus.IN_LOBBY,
-                gameUid = "UID: 33201948", totalMatchesPlayed = 20, winRatePercent = 60,
-                history = listOf(
-                    MatchHistoryItem("LONE WOLF 1V1 DEATHMATCH", "1v1 Lone Wolf", "19 Jul 2026, 06:00 PM", 5, 50, "COMPLETED", "BR_Raptor")
-                )
-            ),
-            LeaderboardPlayer(
-                "Sensi_Pro", false, 58, 2900, "S", PlayerStatus.PLAYING,
-                gameUid = "UID: 22104910", totalMatchesPlayed = 18, winRatePercent = 55,
-                history = listOf(
-                    MatchHistoryItem("BERMUDA SOLO QUICK #02", "Solo", "18 Jul 2026, 04:00 PM", 4, 80, "COMPLETED", "Sensi_Pro")
-                )
-            ),
-            LeaderboardPlayer(
-                "Ninja_FF", false, 49, 2100, "N", PlayerStatus.OFFLINE,
-                gameUid = "UID: 11093821", totalMatchesPlayed = 15, winRatePercent = 50,
-                history = listOf(
-                    MatchHistoryItem("ONE TAP HEADSHOT DUEL", "1v1 Lone Wolf", "17 Jul 2026, 08:00 PM", 3, 30, "COMPLETED", "Ninja_FF")
-                )
-            ),
-            LeaderboardPlayer(
-                "V_B_Bhai", false, 36, 1800, "V", PlayerStatus.ONLINE,
-                gameUid = "UID: 99018234", totalMatchesPlayed = 12, winRatePercent = 45,
-                history = listOf(
-                    MatchHistoryItem("CLASH SQUAD 4V4 BEGINNER", "4v4 CS", "16 Jul 2026, 03:00 PM", 4, 60, "COMPLETED", "VB TEAM")
-                )
+        for (u in firestoreUsers) {
+            val key = u.email.ifBlank { u.id }.lowercase().trim()
+            if (key.isNotBlank()) userMap[key] = u
+        }
+        for (u in registeredUsers) {
+            val key = u.email.ifBlank { u.id }.lowercase().trim()
+            if (key.isNotBlank() && !userMap.containsKey(key)) userMap[key] = u
+        }
+        currentUser?.let { u ->
+            val key = u.email.ifBlank { u.id }.lowercase().trim()
+            if (key.isNotBlank()) userMap[key] = u
+        }
+
+        userMap.values.map { userObj ->
+            val isLocal = currentUser != null && (
+                userObj.email.equals(currentUser?.email, ignoreCase = true) ||
+                userObj.id.equals(currentUser?.id, ignoreCase = true)
             )
-        )
-    }
 
-    var playersList by remember(defaultPlayers) { mutableStateOf(defaultPlayers) }
-
-    // Live Simulator Tickers for players
-    LaunchedEffect(defaultPlayers) {
-        while (true) {
-            kotlinx.coroutines.delay(6000)
-            val activeIndices = playersList.indices.filter { !playersList[it].isLocalUser && playersList[it].status != PlayerStatus.OFFLINE }
-            if (activeIndices.isNotEmpty()) {
-                val targetIndex = activeIndices.random()
-                val player = playersList[targetIndex]
-                val action = (0..2).random()
-                
-                val updatedPlayer = when (action) {
-                    0 -> {
-                        player.copy(
-                            totalKills = player.totalKills + (1..3).random(),
-                            justUpdatedKills = true,
-                            status = PlayerStatus.PLAYING
-                        )
-                    }
-                    1 -> {
-                        player.copy(
-                            totalCoinsEarned = player.totalCoinsEarned + listOf(10, 20, 50, 100).random(),
-                            justUpdatedCoins = true,
-                            status = PlayerStatus.PLAYING
-                        )
-                    }
-                    else -> {
-                        val newStatus = when (player.status) {
-                            PlayerStatus.ONLINE -> PlayerStatus.PLAYING
-                            PlayerStatus.PLAYING -> PlayerStatus.IN_LOBBY
-                            PlayerStatus.IN_LOBBY -> PlayerStatus.ONLINE
-                            PlayerStatus.OFFLINE -> PlayerStatus.ONLINE
-                        }
-                        player.copy(status = newStatus)
-                    }
-                }
-                
-                playersList = playersList.toMutableList().apply {
-                    set(targetIndex, updatedPlayer)
-                }
-                
-                kotlinx.coroutines.delay(1500)
-                playersList = playersList.toMutableList().apply {
-                    if (targetIndex < size) {
-                        val p = get(targetIndex)
-                        set(targetIndex, p.copy(justUpdatedKills = false, justUpdatedCoins = false))
-                    }
-                }
+            val usernameText = userObj.username.ifBlank { userObj.email.substringBefore("@") }.ifBlank { "Gamer" }
+            val name = if (isLocal) {
+                if (userObj.gameName.isNotBlank()) userObj.gameName else "You ($usernameText)"
+            } else {
+                if (userObj.gameName.isNotBlank()) userObj.gameName else usernameText
             }
+
+            val userUidStr = if (userObj.gameUid.isNotBlank()) "UID: ${userObj.gameUid}" else "UID: N/A"
+
+            val coinsWon = if (isLocal) {
+                if (realWinnings > 0) realWinnings else userObj.coinBalance
+            } else {
+                userObj.coinBalance
+            }
+
+            val kills = if (isLocal) {
+                userBookings.size * 2 + (realWinnings / 20)
+            } else {
+                userObj.totalEarnedReferrals
+            }
+
+            val history = if (isLocal) realMatchHistoryList else emptyList()
+
+            LeaderboardPlayer(
+                name = name,
+                isLocalUser = isLocal,
+                totalKills = kills,
+                totalCoinsEarned = coinsWon,
+                avatarChar = if (name.isNotEmpty()) name[0].uppercase() else "P",
+                status = PlayerStatus.ONLINE,
+                gameUid = userUidStr,
+                totalMatchesPlayed = if (isLocal) userBookings.size else 0,
+                history = history,
+                userId = userObj.email.ifBlank { userObj.id }
+            )
         }
     }
 
-    val sortedPlayers = remember(leaderboardTab, playersList) {
+    val sortedPlayers = remember(leaderboardTab, realPlayersList) {
+        val filtered = realPlayersList.filter { 
+            it.totalMatchesPlayed > 0 || it.totalCoinsEarned > 0 || it.totalKills > 0 || it.isLocalUser 
+        }
         if (leaderboardTab == 0) {
-            playersList.sortedByDescending { it.totalCoinsEarned }
+            filtered.sortedByDescending { it.totalCoinsEarned }
         } else {
-            playersList.sortedByDescending { it.totalKills }
+            filtered.sortedByDescending { it.totalKills }
         }
     }
 
@@ -452,7 +378,7 @@ fun LeaderboardScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "1,482 PLAYERS LIVE",
+                        text = "${sortedPlayers.size} ACTIVE PLAYERS",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF4CAF50),
@@ -468,7 +394,7 @@ fun LeaderboardScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "14 CUSTOM ROOMS RUNNING",
+                        text = "${matches.count { it.status == "LIVE" }} LIVE ROOMS",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = FireOrange,
@@ -546,22 +472,57 @@ fun LeaderboardScreen(
                 )
             }
 
-            // Players List
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .testTag("leaderboard_list"),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                itemsIndexed(sortedPlayers) { index, player ->
-                    LeaderboardRowItem(
-                        rank = index + 1,
-                        player = player,
-                        activeTab = leaderboardTab,
-                        onClick = { selectedPlayerForHistory = player }
-                    )
+            // Players List / Empty State
+            if (sortedPlayers.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SlateDarkSurface),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp, horizontal = 16.dp)
+                        .border(1.dp, SlateDarkBorder, RoundedCornerShape(16.dp))
+                        .testTag("leaderboard_empty_state")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = GoldBooyah,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No active players on leaderboard yet. Play matches to join the rank!",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag("leaderboard_list"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    itemsIndexed(sortedPlayers) { index, player ->
+                        LeaderboardRowItem(
+                            rank = index + 1,
+                            player = player,
+                            activeTab = leaderboardTab,
+                            onClick = { selectedPlayerForHistory = player }
+                        )
+                    }
                 }
             }
         }
@@ -570,6 +531,7 @@ fun LeaderboardScreen(
         selectedPlayerForHistory?.let { player ->
             PlayerHistoryDialog(
                 player = player,
+                viewModel = viewModel,
                 onDismiss = { selectedPlayerForHistory = null }
             )
         }
@@ -794,8 +756,61 @@ fun LeaderboardRowItem(
 @Composable
 fun PlayerHistoryDialog(
     player: LeaderboardPlayer,
+    viewModel: TournamentViewModel,
     onDismiss: () -> Unit
 ) {
+    var matchHistoryList by remember { mutableStateOf<List<MatchHistoryItem>>(player.history) }
+    var isLoadingHistory by remember { mutableStateOf(false) }
+
+    val matches by viewModel.matches.collectAsState()
+
+    LaunchedEffect(player) {
+        if (player.history.isNotEmpty() && player.isLocalUser) {
+            matchHistoryList = player.history
+        } else {
+            isLoadingHistory = true
+            try {
+                val targetId = player.userId.ifBlank { player.name }
+                val bookings = viewModel.firebaseRepository.fetchUserBookingsFromFirestore(targetId)
+                val txns = viewModel.firebaseRepository.fetchUserTransactionsFromFirestore(targetId)
+                
+                val history = bookings.map { booking ->
+                    val matchObj = matches.find { it.id == booking.matchId }
+                    val dateFmt = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.US).format(Date(booking.bookedAtMillis))
+                    
+                    val winTxn = txns.find { txn ->
+                        txn.type == "DEPOSIT" && (
+                            (matchObj != null && txn.accountDetail.contains(matchObj.title, ignoreCase = true)) ||
+                            txn.accountDetail.contains("Match", ignoreCase = true) ||
+                            txn.accountDetail.contains("WIN", ignoreCase = true)
+                        )
+                    }
+                    val earnings = winTxn?.amount ?: 0
+                    val status = when {
+                        matchObj?.status == "PAST" && earnings > 0 -> "VICTORY (BOOYAH!)"
+                        matchObj?.status == "PAST" -> "COMPLETED"
+                        matchObj?.status == "LIVE" -> "LIVE NOW"
+                        else -> "REGISTERED (UPCOMING)"
+                    }
+                    
+                    MatchHistoryItem(
+                        matchTitle = matchObj?.title ?: "Free Fire Match #${booking.matchId}",
+                        gameMode = booking.bookingType,
+                        dateText = dateFmt,
+                        kills = if (earnings > 0) (earnings / (matchObj?.perKillPrize?.takeIf { it > 0 } ?: 10)) else 0,
+                        earningsCoins = earnings,
+                        statusText = status,
+                        teamOrIgn = booking.teamName ?: booking.player1Name
+                    )
+                }
+                matchHistoryList = history
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            isLoadingHistory = false
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SlateDarkSurface,
@@ -897,7 +912,7 @@ fun PlayerHistoryDialog(
                 ) {
                     StatBox(
                         title = "MATCHES",
-                        value = "${player.totalMatchesPlayed}",
+                        value = "${if (matchHistoryList.isNotEmpty()) matchHistoryList.size else player.totalMatchesPlayed}",
                         icon = Icons.Default.ConfirmationNumber,
                         iconTint = FireOrange,
                         modifier = Modifier.weight(1f)
@@ -930,7 +945,16 @@ fun PlayerHistoryDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                if (player.history.isEmpty()) {
+                if (isLoadingHistory) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = FireOrange, modifier = Modifier.size(28.dp))
+                    }
+                } else if (matchHistoryList.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -948,7 +972,7 @@ fun PlayerHistoryDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        itemsIndexed(player.history) { _, matchItem ->
+                        itemsIndexed(matchHistoryList) { _, matchItem ->
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = SlateDarkBg),
                                 shape = RoundedCornerShape(8.dp),

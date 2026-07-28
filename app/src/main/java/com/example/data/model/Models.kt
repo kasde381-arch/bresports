@@ -113,3 +113,13 @@ data class AppUpdateInfo(
     val errorMessage: String? = null
 )
 
+data class DepositRequest(
+    val id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val amount: Int = 0,
+    val utrNumber: String = "",
+    val status: String = "PENDING", // PENDING, SUCCESS, REJECTED
+    val timestamp: Long = System.currentTimeMillis()
+)
+

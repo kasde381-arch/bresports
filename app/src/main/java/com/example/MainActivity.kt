@@ -33,10 +33,6 @@ import com.example.ui.theme.FireOrangeLight
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.TournamentViewModel
-import com.razorpay.Checkout
-import com.razorpay.PaymentData
-import com.razorpay.PaymentResultListener
-import com.razorpay.PaymentResultWithDataListener
 import org.json.JSONObject
 import android.widget.Toast
 import kotlinx.coroutines.flow.collectLatest
@@ -54,19 +50,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 
-class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
-
-    private var pendingRazorpayAmount: Int = 0
-    private var activeViewModel: TournamentViewModel? = null
+class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        try {
-            Checkout.preload(applicationContext)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
 
         try {
             if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
@@ -119,60 +106,6 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 }
             }
         }
-    }
-
-    fun startRazorpayPayment(amount: Int, userEmail: String, userPhone: String, viewModel: TournamentViewModel) {
-        this.pendingRazorpayAmount = amount
-        this.activeViewModel = viewModel
-
-        val checkout = Checkout()
-        checkout.setKeyID("rzp_test_TIWak1NzU449DM")
-
-        try {
-            val options = JSONObject()
-            options.put("name", "BR Esports Arena")
-            options.put("description", "Deposit $amount Coins into Wallet")
-            options.put("currency", "INR")
-            options.put("amount", amount * 100) // Razorpay expects amount in paise (1 INR = 100 paise)
-
-            val prefill = JSONObject()
-            prefill.put("email", if (userEmail.isNotBlank()) userEmail else "player@bresports.app")
-            prefill.put("contact", if (userPhone.isNotBlank()) userPhone else "9876543210")
-            options.put("prefill", prefill)
-
-            val theme = JSONObject()
-            theme.put("color", "#FF6B00")
-            options.put("theme", theme)
-
-            val retryObj = JSONObject()
-            retryObj.put("enabled", true)
-            retryObj.put("max_count", 2)
-            options.put("retry", retryObj)
-
-            checkout.open(this, options)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "Error starting Razorpay checkout: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
-        val paymentId = razorpayPaymentId ?: paymentData?.paymentId ?: ("pay_" + System.currentTimeMillis())
-        val amt = if (pendingRazorpayAmount > 0) pendingRazorpayAmount else 100
-        activeViewModel?.processRazorpayPaymentSuccess(paymentId, amt)
-        Toast.makeText(this, "Payment Successful! $amt Coins added to wallet.", Toast.LENGTH_LONG).show()
-        pendingRazorpayAmount = 0
-    }
-
-    override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
-        val msg = try {
-            val json = JSONObject(response ?: "{}")
-            json.optJSONObject("error")?.optString("description") ?: response ?: "Payment cancelled or failed"
-        } catch (e: Exception) {
-            response ?: "Payment cancelled or failed"
-        }
-        Toast.makeText(this, "Payment Failed: $msg", Toast.LENGTH_LONG).show()
-        pendingRazorpayAmount = 0
     }
 }
 

@@ -293,32 +293,6 @@ class TournamentRepository(
             }
 
             matchDao.insertMatches(newMatches)
-            
-            // Seed default profile so it's ready out-of-the-box
-            userDao.insertOrUpdateUser(
-                User(
-                    id = "kasde381@gmail.com",
-                    gameUid = "842910485",
-                    gameName = "BOOYAH_SLAYER",
-                    email = "kasde381@gmail.com",
-                    username = "booyah_slayer",
-                    phone = "9876543210",
-                    avatar = "avatar_ff_red",
-                    coinBalance = 1500
-                )
-            )
-            userDao.insertOrUpdateUser(
-                User(
-                    id = "local_user",
-                    gameUid = "842910485",
-                    gameName = "BOOYAH_SLAYER",
-                    email = "kasde381@gmail.com",
-                    username = "booyah_slayer",
-                    phone = "9876543210",
-                    avatar = "avatar_ff_red",
-                    coinBalance = 1500
-                )
-            )
 
             // Seed default app configs
             appConfigDao.insertConfig(

@@ -45,6 +45,7 @@ fun AdminPanelScreen(
     modifier: Modifier = Modifier
 ) {
     val user by viewModel.user.collectAsState()
+    val isCurrentUserAdmin by viewModel.isCurrentUserAdmin.collectAsState()
     val matches by viewModel.matches.collectAsState()
     val transactions by viewModel.allTransactions.collectAsState()
     val latestVersionCode by viewModel.latestVersionCode.collectAsState()
@@ -54,6 +55,15 @@ fun AdminPanelScreen(
     val announcement by viewModel.announcement.collectAsState()
     var announcementInput by remember(announcement) { mutableStateOf(announcement) }
     var isEditingAnnouncement by remember { mutableStateOf(false) }
+    
+    val depositRequests by viewModel.depositRequests.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.fetchPendingDepositRequests()
+    }
+
+    val pendingFirestoreRequests = remember(depositRequests) {
+        depositRequests.filter { it.status == "PENDING" }
+    }
     
     val pendingWithdrawals = remember(transactions) {
         transactions.filter { it.type == "WITHDRAWAL" && it.status == "PENDING" }
@@ -389,9 +399,10 @@ fun AdminPanelScreen(
                     }
 
                     // ------------------ PENDING DEPOSIT REQUESTS (RECEIVED) SECTION ------------------
+                    val totalPendingDepositCount = pendingFirestoreRequests.size + pendingDeposits.size
                     item {
                         Text(
-                            text = "PENDING DEPOSIT REQUESTS (RECEIVED) (${pendingDeposits.size})",
+                            text = "PENDING DEPOSIT REQUESTS (RECEIVED) ($totalPendingDepositCount)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = GoldBooyah,
@@ -402,7 +413,7 @@ fun AdminPanelScreen(
                         )
                     }
 
-                    if (pendingDeposits.isEmpty()) {
+                    if (totalPendingDepositCount == 0) {
                         item {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = SlateDarkSurface),
@@ -442,6 +453,131 @@ fun AdminPanelScreen(
                             }
                         }
                     } else {
+                        // Render Firestore deposit_requests collection items
+                        items(pendingFirestoreRequests, key = { "req_${it.id}" }) { req ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SlateDarkSurface),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp)
+                                    .border(1.5.dp, FireOrange.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "Deposit Request (Firestore)",
+                                                fontWeight = FontWeight.Bold,
+                                                color = FireOrange,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = "User: ${req.userName}",
+                                                fontWeight = FontWeight.Black,
+                                                color = TextPrimary,
+                                                fontSize = 15.sp
+                                            )
+                                        }
+                                        
+                                        Text(
+                                            text = "₹${req.amount} (+${req.amount} Coins)",
+                                            fontWeight = FontWeight.Black,
+                                            color = Color(0xFF4CAF50),
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = GoldBooyah,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "User ID: ${req.userId}",
+                                            fontSize = 12.sp,
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Receipt,
+                                            contentDescription = null,
+                                            tint = GoldBooyah,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "12-Digit UTR: ${req.utrNumber}",
+                                            fontSize = 13.sp,
+                                            color = GoldBooyah,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Submitted: ${SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.timestamp))}",
+                                        fontSize = 10.sp,
+                                        color = TextSecondary.copy(alpha = 0.6f)
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { viewModel.approveDepositRequest(req) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier
+                                                .testTag("approve_deposit_request_button")
+                                                .weight(1.3f)
+                                                .height(40.dp)
+                                        ) {
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("APPROVE DEPOSIT", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                        
+                                        OutlinedButton(
+                                            onClick = { viewModel.rejectDepositRequest(req) },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350)),
+                                            border = BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier
+                                                .testTag("decline_deposit_request_button")
+                                                .weight(0.7f)
+                                                .height(40.dp)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("DECLINE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Render local transactions pending items
                         items(pendingDeposits, key = { it.id }) { txn ->
                             val userForTxn = registeredUsers.find { it.id == txn.userId }
                             val playerGameName = userForTxn?.gameName ?: "Unknown"
@@ -594,7 +730,7 @@ fun AdminPanelScreen(
                     }
 
                     // ------------------ OWNER CONSOLE: TRUSTED ADMIN MANAGEMENT ------------------
-            if (user?.email == "kasde381@gmail.com") {
+            if (isCurrentUserAdmin) {
                 item {
                     var showAddAdminDialog by remember { mutableStateOf(false) }
                     val trustedAdminsStr by viewModel.trustedAdmins.collectAsState()
