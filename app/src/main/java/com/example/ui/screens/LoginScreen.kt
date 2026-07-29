@@ -55,7 +55,7 @@ enum class LoginState {
 
 private fun getGoogleSignInClient(context: Context): GoogleSignInClient {
     val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-    val webClientId = if (resId != 0) context.getString(resId) else "550699681641-compute@developer.gserviceaccount.com"
+    val webClientId = if (resId != 0) context.getString(resId) else "550699681641-e217g1g2dicatkp8r7sigv86tcd6hm1t.apps.googleusercontent.com"
 
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestIdToken(webClientId)
