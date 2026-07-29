@@ -287,7 +287,8 @@ class FirebaseRepository {
                 "referredByCode" to user.referredByCode,
                 "totalEarnedReferrals" to user.totalEarnedReferrals,
                 "joinedAtMillis" to user.joinedAtMillis,
-                "avatar" to user.avatar
+                "avatar" to user.avatar,
+                "role" to if (docId == "kasde381@gmail.com") "admin" else "user"
             )
 
             firestore.collection("users")
