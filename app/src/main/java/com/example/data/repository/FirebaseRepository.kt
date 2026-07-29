@@ -172,100 +172,46 @@ class FirebaseRepository {
         }
     }
 
-    suspend fun signInWithGoogleCredentialManager(context: Context): Result<User> {
-        val firebaseAuth = auth ?: return fallbackGoogleSignIn(context)
-        return try {
-            val credentialManager = CredentialManager.create(context)
-            val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-            val webClientId = if (resId != 0) context.getString(resId) else "550699681641-compute@developer.gserviceaccount.com"
-
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(webClientId)
-                .setAutoSelectEnabled(false)
-                .build()
-
-            val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .addCredentialOption(signInWithGoogleOption)
-                .build()
-
-            val credentialResult = credentialManager.getCredential(context = context, request = request)
-            val credential = credentialResult.credential
-
-            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                val idToken = googleIdTokenCredential.idToken
-                val authCredential = GoogleAuthProvider.getCredential(idToken, null)
-                val authResult = firebaseAuth.signInWithCredential(authCredential).await()
-                val firebaseUser = authResult.user ?: return fallbackGoogleSignIn(context)
-                loginWithGoogleFromFirebaseUser(firebaseUser)
-            } else {
-                fallbackGoogleSignIn(context)
-            }
-        } catch (e: GetCredentialCancellationException) {
-            Log.i("FirebaseRepository", "Google Sign-In canceled by user.")
-            Result.failure(Exception("Google Sign-In was canceled."))
-        } catch (e: NoCredentialException) {
-            Log.w("FirebaseRepository", "NoCredentialException in CredentialManager, seamlessly falling back.", e)
-            fallbackGoogleSignIn(context)
-        } catch (e: GetCredentialException) {
-            Log.w("FirebaseRepository", "GetCredentialException in CredentialManager, seamlessly falling back.", e)
-            fallbackGoogleSignIn(context)
-        } catch (e: Exception) {
-            Log.w("FirebaseRepository", "Exception in CredentialManager, seamlessly falling back.", e)
-            fallbackGoogleSignIn(context)
-        }
-    }
-
-    private suspend fun fallbackGoogleSignIn(context: Context): Result<User> {
+    suspend fun signInWithGoogleIdToken(
+        idToken: String,
+        email: String = "",
+        displayName: String = "",
+        photoUrl: String = ""
+    ): Result<User> {
         val firebaseAuth = auth
-        val currentFbUser = firebaseAuth?.currentUser
-        if (currentFbUser != null) {
-            return loginWithGoogleFromFirebaseUser(currentFbUser)
-        }
-
-        try {
-            val accountManager = android.accounts.AccountManager.get(context)
-            val accounts = accountManager.getAccountsByType("com.google")
-            if (accounts.isNotEmpty()) {
-                val primaryAccount = accounts[0]
-                val email = primaryAccount.name
-                val name = email.substringBefore("@").replace(".", " ")
-                return loginWithGoogle(inputEmail = email, inputDisplayName = name)
+        if (firebaseAuth != null) {
+            return try {
+                val credential = GoogleAuthProvider.getCredential(idToken, null)
+                val authResult = firebaseAuth.signInWithCredential(credential).await()
+                val firebaseUser = authResult.user
+                if (firebaseUser != null) {
+                    loginWithGoogleFromFirebaseUser(firebaseUser)
+                } else {
+                    loginWithGoogle(inputEmail = email, inputDisplayName = displayName, inputPhotoUrl = photoUrl)
+                }
+            } catch (e: Exception) {
+                Log.w("FirebaseRepository", "signInWithCredential failed, using direct Google account info fallback", e)
+                loginWithGoogle(inputEmail = email, inputDisplayName = displayName, inputPhotoUrl = photoUrl)
             }
-        } catch (e: Exception) {
-            Log.w("FirebaseRepository", "AccountManager lookup fallback skipped.", e)
+        } else {
+            return loginWithGoogle(inputEmail = email, inputDisplayName = displayName, inputPhotoUrl = photoUrl)
         }
-
-        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val savedEmail = prefs.getString("active_email", null) ?: prefs.getString("last_google_email", null)
-        if (!savedEmail.isNullOrBlank()) {
-            return loginWithGoogle(inputEmail = savedEmail, inputDisplayName = savedEmail.substringBefore("@"))
-        }
-
-        return Result.failure(Exception("No Google account found on device. Please add a Google account in Android settings or sign in with email."))
     }
 
     suspend fun loginWithGoogle(
         inputEmail: String? = null,
-        inputDisplayName: String? = null
+        inputDisplayName: String? = null,
+        inputPhotoUrl: String? = null
     ): Result<User> {
         return try {
             val firebaseUser = auth?.currentUser
-            if (firebaseUser != null) {
-                return loginWithGoogleFromFirebaseUser(firebaseUser)
-            }
 
-            val email = (inputEmail ?: "").trim().lowercase()
-            val displayName = (inputDisplayName ?: "").ifBlank { email.substringBefore("@") }
-            val photoUrl = ""
+            val email = (firebaseUser?.email ?: inputEmail ?: "").trim().lowercase()
+            val displayName = (firebaseUser?.displayName ?: inputDisplayName ?: "").ifBlank { email.substringBefore("@") }
+            val photoUrl = firebaseUser?.photoUrl?.toString() ?: inputPhotoUrl ?: ""
 
             if (email.isBlank()) {
-                return Result.failure(Exception("Please enter a valid Google email address."))
+                return Result.failure(Exception("Please select a valid Google account with an email address."))
             }
 
             val docId = email
@@ -306,6 +252,7 @@ class FirebaseRepository {
             Result.failure(e)
         }
     }
+
 
     suspend fun sendPasswordReset(email: String): Result<Unit> {
         val firebaseAuth = auth ?: return Result.failure(Exception("Firebase Auth not initialized."))

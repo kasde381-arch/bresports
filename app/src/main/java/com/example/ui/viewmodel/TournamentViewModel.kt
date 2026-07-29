@@ -504,80 +504,63 @@ class TournamentViewModel(
     val allSupportMessages: StateFlow<List<SupportMessage>> = repository.allSupportMessages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun signInWithGoogle(
-        context: Context,
+    fun signInWithGoogleIdToken(
+        idToken: String,
+        email: String,
+        displayName: String,
+        photoUrl: String,
         onResult: (Boolean, String) -> Unit = { _, _ -> }
     ) {
         viewModelScope.launch {
-            val result = firebaseRepository.signInWithGoogleCredentialManager(context)
-            if (result.isSuccess) {
-                val googleUser = result.getOrThrow()
-                val activeEmail = googleUser.email.ifBlank { googleUser.id }
-
-                // Save to Room database
-                repository.saveUserProfile(googleUser)
-
-                prefs.edit()
-                    .putBoolean("is_logged_in", true)
-                    .putString("active_email", activeEmail)
-                    .putString("user_username_$activeEmail", googleUser.username)
-                    .putString("user_phone_$activeEmail", googleUser.phone)
-                    .putString("user_uid_$activeEmail", googleUser.gameUid)
-                    .putString("user_ign_$activeEmail", googleUser.gameName)
-                    .putInt("user_coins_$activeEmail", googleUser.coinBalance)
-                    .putString("user_referral_code_$activeEmail", googleUser.referralCode)
-                    .apply()
-
-                _activeUserId.value = activeEmail
-                _isLoggedIn.value = true
-
-                val welcomeMsg = "Signed in with Google as ${googleUser.gameName.ifBlank { googleUser.username }}!"
-                _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
-                onResult(true, welcomeMsg)
-            } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Google Authentication failed."
-                _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
-                onResult(false, errorMsg)
-            }
+            val result = firebaseRepository.signInWithGoogleIdToken(idToken, email, displayName, photoUrl)
+            handleGoogleSignInResult(result, onResult)
         }
     }
 
     fun loginWithGoogle(
         email: String? = null,
         displayName: String? = null,
+        photoUrl: String? = null,
         onResult: (Boolean, String) -> Unit = { _, _ -> }
     ) {
         viewModelScope.launch {
-            val result = firebaseRepository.loginWithGoogle(email, displayName)
-            if (result.isSuccess) {
-                val googleUser = result.getOrThrow()
-                val activeEmail = googleUser.email.ifBlank { googleUser.id }
+            val result = firebaseRepository.loginWithGoogle(email, displayName, photoUrl)
+            handleGoogleSignInResult(result, onResult)
+        }
+    }
 
-                // Save to Room database
-                repository.saveUserProfile(googleUser)
+    private suspend fun handleGoogleSignInResult(
+        result: Result<User>,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        if (result.isSuccess) {
+            val googleUser = result.getOrThrow()
+            val activeEmail = googleUser.email.ifBlank { googleUser.id }
 
-                prefs.edit()
-                    .putBoolean("is_logged_in", true)
-                    .putString("active_email", activeEmail)
-                    .putString("user_username_$activeEmail", googleUser.username)
-                    .putString("user_phone_$activeEmail", googleUser.phone)
-                    .putString("user_uid_$activeEmail", googleUser.gameUid)
-                    .putString("user_ign_$activeEmail", googleUser.gameName)
-                    .putInt("user_coins_$activeEmail", googleUser.coinBalance)
-                    .putString("user_referral_code_$activeEmail", googleUser.referralCode)
-                    .apply()
+            // Save to Room database
+            repository.saveUserProfile(googleUser)
 
-                _activeUserId.value = activeEmail
-                _isLoggedIn.value = true
+            prefs.edit()
+                .putBoolean("is_logged_in", true)
+                .putString("active_email", activeEmail)
+                .putString("user_username_$activeEmail", googleUser.username)
+                .putString("user_phone_$activeEmail", googleUser.phone)
+                .putString("user_uid_$activeEmail", googleUser.gameUid)
+                .putString("user_ign_$activeEmail", googleUser.gameName)
+                .putInt("user_coins_$activeEmail", googleUser.coinBalance)
+                .putString("user_referral_code_$activeEmail", googleUser.referralCode)
+                .apply()
 
-                val welcomeMsg = "Signed in with Google as ${googleUser.gameName.ifBlank { googleUser.username }}!"
-                _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
-                onResult(true, welcomeMsg)
-            } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Google Authentication failed."
-                _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
-                onResult(false, errorMsg)
-            }
+            _activeUserId.value = activeEmail
+            _isLoggedIn.value = true
+
+            val welcomeMsg = "Signed in as ${googleUser.email}!"
+            _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
+            onResult(true, welcomeMsg)
+        } else {
+            val errorMsg = result.exceptionOrNull()?.message ?: "Google Authentication failed."
+            _eventFlow.emit(UIEvent.ShowMessage(errorMsg))
+            onResult(false, errorMsg)
         }
     }
 

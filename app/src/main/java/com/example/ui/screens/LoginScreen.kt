@@ -40,10 +40,30 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
 enum class LoginState {
     SIGN_IN, SIGN_UP
 }
+
+private fun getGoogleSignInClient(context: Context): GoogleSignInClient {
+    val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+    val webClientId = if (resId != 0) context.getString(resId) else "550699681641-compute@developer.gserviceaccount.com"
+
+    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestIdToken(webClientId)
+        .requestEmail()
+        .build()
+
+    return GoogleSignIn.getClient(context, gso)
+}
+
 
 @Composable
 fun GoogleLogoRing(modifier: Modifier = Modifier) {
@@ -88,6 +108,56 @@ fun LoginScreen(
 
     // Error message display
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+            val email = account?.email ?: ""
+            val displayName = account?.displayName ?: ""
+            val photoUrl = account?.photoUrl?.toString() ?: ""
+
+            if (!idToken.isNullOrBlank()) {
+                viewModel.signInWithGoogleIdToken(idToken, email, displayName, photoUrl) { success, msg ->
+                    isAuthenticating = false
+                    if (!success) {
+                        errorMessage = msg
+                    }
+                }
+            } else if (email.isNotBlank()) {
+                viewModel.loginWithGoogle(email, displayName, photoUrl) { success, msg ->
+                    isAuthenticating = false
+                    if (!success) {
+                        errorMessage = msg
+                    }
+                }
+            } else {
+                isAuthenticating = false
+                errorMessage = "Google account selection was canceled."
+            }
+        } catch (e: ApiException) {
+            isAuthenticating = false
+            if (e.statusCode == 12501) { // SIGN_IN_CANCELLED
+                errorMessage = "Google Sign-In canceled."
+            } else {
+                val email = try { task.result?.email } catch (_: Exception) { null }
+                val name = try { task.result?.displayName } catch (_: Exception) { null }
+                if (!email.isNullOrBlank()) {
+                    viewModel.loginWithGoogle(email, name) { success, msg ->
+                        if (!success) errorMessage = msg
+                    }
+                } else {
+                    errorMessage = "Google Sign-In error (code ${e.statusCode}). Please try again."
+                }
+            }
+        } catch (e: Exception) {
+            isAuthenticating = false
+            errorMessage = "Google Sign-In error: ${e.localizedMessage ?: "Unknown error"}"
+        }
+    }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var resetEmailInput by remember { mutableStateOf("") }
     var isSendingReset by remember { mutableStateOf(false) }
@@ -377,11 +447,15 @@ fun LoginScreen(
                             onClick = {
                                 isAuthenticating = true
                                 errorMessage = null
-                                viewModel.signInWithGoogle(context) { success, msg ->
-                                    isAuthenticating = false
-                                    if (!success) {
-                                        errorMessage = msg
+                                try {
+                                    val client = getGoogleSignInClient(context)
+                                    client.signOut().addOnCompleteListener {
+                                        val signInIntent = client.signInIntent
+                                        googleSignInLauncher.launch(signInIntent)
                                     }
+                                } catch (e: Exception) {
+                                    isAuthenticating = false
+                                    errorMessage = "Google Sign-In error: ${e.localizedMessage ?: "Failed to launch intent"}"
                                 }
                             },
                             enabled = !isAuthenticating,
