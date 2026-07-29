@@ -23,6 +23,9 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 class FirebaseRepository {
 
@@ -272,12 +275,13 @@ class FirebaseRepository {
 
             val userMap = hashMapOf(
                 "id" to docId,
-                "email" to user.email,
+                "email" to user.email.ifBlank { docId },
                 "username" to user.username,
                 "gameUid" to user.gameUid,
                 "gameName" to user.gameName,
                 "phone" to user.phone,
                 "coinBalance" to user.coinBalance,
+                "walletBalance" to user.coinBalance,
                 "promoCode" to user.promoCode,
                 "referralCode" to user.referralCode,
                 "referredByCode" to user.referredByCode,
@@ -295,6 +299,55 @@ class FirebaseRepository {
         }
     }
 
+    fun observeUserProfileFromFirestore(emailOrId: String): Flow<User?> = callbackFlow {
+        val firestore = db ?: run {
+            trySend(null)
+            close()
+            return@callbackFlow
+        }
+        val docId = emailOrId.trim().lowercase()
+        if (docId.isBlank()) {
+            trySend(null)
+            close()
+            return@callbackFlow
+        }
+
+        val registration = firestore.collection("users").document(docId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("FirebaseRepository", "Listen failed for user profile $docId", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    val data = snapshot.data ?: return@addSnapshotListener
+                    val rawCoin = data["coinBalance"] ?: data["walletBalance"]
+                    val coinVal = when (rawCoin) {
+                        is Number -> rawCoin.toInt()
+                        is String -> rawCoin.toIntOrNull() ?: 0
+                        else -> 0
+                    }
+                    val emailVal = data["email"] as? String ?: docId
+                    val user = User(
+                        id = docId,
+                        email = emailVal,
+                        username = data["username"] as? String ?: "",
+                        gameUid = data["gameUid"] as? String ?: "",
+                        gameName = data["gameName"] as? String ?: "",
+                        phone = data["phone"] as? String ?: "",
+                        coinBalance = coinVal,
+                        promoCode = data["promoCode"] as? String ?: "",
+                        referralCode = data["referralCode"] as? String ?: "",
+                        referredByCode = data["referredByCode"] as? String ?: "",
+                        totalEarnedReferrals = (data["totalEarnedReferrals"] as? Long)?.toInt() ?: 0,
+                        joinedAtMillis = (data["joinedAtMillis"] as? Long) ?: System.currentTimeMillis(),
+                        avatar = data["avatar"] as? String ?: "ic_avatar_1"
+                    )
+                    trySend(user)
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
     suspend fun fetchUserProfileFromFirestore(emailOrId: String): User? {
         val firestore = db ?: return null
         val docId = emailOrId.trim().lowercase()
@@ -304,6 +357,12 @@ class FirebaseRepository {
             val snapshot = firestore.collection("users").document(docId).get().await()
             if (snapshot.exists()) {
                 val data = snapshot.data ?: return null
+                val rawCoin = data["coinBalance"] ?: data["walletBalance"]
+                val coinVal = when (rawCoin) {
+                    is Number -> rawCoin.toInt()
+                    is String -> rawCoin.toIntOrNull() ?: 0
+                    else -> 0
+                }
                 User(
                     id = docId,
                     email = data["email"] as? String ?: docId,
@@ -311,7 +370,7 @@ class FirebaseRepository {
                     gameUid = data["gameUid"] as? String ?: "",
                     gameName = data["gameName"] as? String ?: "",
                     phone = data["phone"] as? String ?: "",
-                    coinBalance = (data["coinBalance"] as? Long)?.toInt() ?: (data["coinBalance"] as? Int) ?: 0,
+                    coinBalance = coinVal,
                     promoCode = data["promoCode"] as? String ?: "",
                     referralCode = data["referralCode"] as? String ?: "",
                     referredByCode = data["referredByCode"] as? String ?: "",
@@ -326,6 +385,107 @@ class FirebaseRepository {
             e.printStackTrace()
             null
         }
+    }
+
+    fun observeUserTransactionsFromFirestore(userId: String): Flow<List<WalletTransaction>> = callbackFlow {
+        val firestore = db ?: run {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val docId = userId.trim().lowercase()
+        if (docId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val registration = firestore.collection("transactions")
+            .whereEqualTo("userId", docId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("FirebaseRepository", "Listen failed for user transactions $docId", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val txns = snapshot.documents.mapNotNull { doc ->
+                        val rawAmt = doc.get("amount")
+                        val amt = when (rawAmt) {
+                            is Number -> rawAmt.toInt()
+                            is String -> rawAmt.toIntOrNull() ?: 0
+                            else -> 0
+                        }
+                        val rawTs = doc.get("timestamp")
+                        val ts = when (rawTs) {
+                            is Number -> rawTs.toLong()
+                            is String -> rawTs.toLongOrNull() ?: System.currentTimeMillis()
+                            else -> System.currentTimeMillis()
+                        }
+                        WalletTransaction(
+                            id = doc.id.hashCode(),
+                            userId = doc.getString("userId") ?: docId,
+                            type = doc.getString("type") ?: "DEPOSIT",
+                            amount = amt,
+                            title = doc.getString("title") ?: "",
+                            timestamp = ts,
+                            paymentMethod = doc.getString("paymentMethod") ?: "",
+                            accountDetail = doc.getString("accountDetail") ?: "",
+                            status = doc.getString("status") ?: "SUCCESS",
+                            transactionRef = doc.getString("transactionRef") ?: doc.getString("reference") ?: ""
+                        )
+                    }
+                    trySend(txns)
+                }
+            }
+        awaitClose { registration.remove() }
+    }
+
+    fun observeUserBookingsFromFirestore(userId: String): Flow<List<Booking>> = callbackFlow {
+        val firestore = db ?: run {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val docId = userId.trim().lowercase()
+        if (docId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val registration = firestore.collection("bookings")
+            .whereEqualTo("userId", docId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("FirebaseRepository", "Listen failed for user bookings $docId", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val bookings = snapshot.documents.mapNotNull { doc ->
+                        val matchId = (doc.getLong("matchId"))?.toInt() ?: return@mapNotNull null
+                        Booking(
+                            id = doc.id.hashCode(),
+                            matchId = matchId,
+                            userId = doc.getString("userId") ?: docId,
+                            bookingType = doc.getString("bookingType") ?: "Solo",
+                            teamName = doc.getString("teamName"),
+                            player1Name = doc.getString("player1Name") ?: "",
+                            player1Uid = doc.getString("player1Uid") ?: "",
+                            player2Name = doc.getString("player2Name"),
+                            player2Uid = doc.getString("player2Uid"),
+                            player3Name = doc.getString("player3Name"),
+                            player3Uid = doc.getString("player3Uid"),
+                            player4Name = doc.getString("player4Name"),
+                            player4Uid = doc.getString("player4Uid"),
+                            entryFeePaid = (doc.getLong("entryFeePaid"))?.toInt() ?: 0,
+                            bookedAtMillis = doc.getLong("bookedAtMillis") ?: System.currentTimeMillis(),
+                            screenshotUri = doc.getString("screenshotUri")
+                        )
+                    }
+                    trySend(bookings)
+                }
+            }
+        awaitClose { registration.remove() }
     }
 
     suspend fun saveBookingToFirestore(booking: Booking) {

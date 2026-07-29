@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import android.content.Intent
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -231,40 +232,18 @@ class TournamentViewModel(
             if (activeEmail.isNotBlank() && (firebaseEmail != null || savedLoggedIn)) {
                 _activeUserId.value = activeEmail
                 _isLoggedIn.value = true
-
-                // Sync & restore user data from Firebase Firestore
-                try {
-                    val remoteUser = firebaseRepository.fetchUserProfileFromFirestore(activeEmail)
-                    if (remoteUser != null) {
-                        repository.saveUserProfile(remoteUser)
-                        prefs.edit()
-                            .putString("user_username_$activeEmail", remoteUser.username)
-                            .putString("user_phone_$activeEmail", remoteUser.phone)
-                            .putString("user_uid_$activeEmail", remoteUser.gameUid)
-                            .putString("user_ign_$activeEmail", remoteUser.gameName)
-                            .putInt("user_coins_$activeEmail", remoteUser.coinBalance)
-                            .putString("user_referral_code_$activeEmail", remoteUser.referralCode)
-                            .apply()
-                    }
-                    val remoteBookings = firebaseRepository.fetchUserBookingsFromFirestore(activeEmail)
-                    remoteBookings.forEach { repository.updateBooking(it) }
-
-                    val remoteTxns = firebaseRepository.fetchUserTransactionsFromFirestore(activeEmail)
-                    remoteTxns.forEach { repository.insertTransaction(it) }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                syncUserDataAndTransactionsForEmail(activeEmail)
             } else {
                 _activeUserId.value = ""
                 _isLoggedIn.value = false
             }
             _isAuthChecking.value = false
+        }
 
-            // Real-time periodic polling loop to keep user wallet balance & transaction history updated instantly
-            while (true) {
-                kotlinx.coroutines.delay(4000)
-                if (_isLoggedIn.value && _activeUserId.value.isNotBlank()) {
-                    syncUserDataAndTransactions()
+        viewModelScope.launch {
+            _activeUserId.collect { activeEmail ->
+                if (activeEmail.isNotBlank()) {
+                    syncUserDataAndTransactionsForEmail(activeEmail)
                 }
             }
         }
@@ -535,26 +514,38 @@ class TournamentViewModel(
     ) {
         if (result.isSuccess) {
             val googleUser = result.getOrThrow()
-            val activeEmail = googleUser.email.ifBlank { googleUser.id }
+            val activeEmail = googleUser.email.ifBlank { googleUser.id }.trim().lowercase()
 
-            // Save to Room database
-            repository.saveUserProfile(googleUser)
+            val existingRemoteUser = firebaseRepository.fetchUserProfileFromFirestore(activeEmail)
+            val finalUser = if (existingRemoteUser != null) {
+                existingRemoteUser.copy(
+                    email = googleUser.email.ifBlank { activeEmail },
+                    username = if (googleUser.username.isNotBlank()) googleUser.username else existingRemoteUser.username,
+                    avatar = if (googleUser.avatar.isNotBlank()) googleUser.avatar else existingRemoteUser.avatar
+                )
+            } else {
+                googleUser.copy(id = activeEmail, email = googleUser.email.ifBlank { activeEmail })
+            }
+
+            repository.saveUserProfile(finalUser)
 
             prefs.edit()
                 .putBoolean("is_logged_in", true)
                 .putString("active_email", activeEmail)
-                .putString("user_username_$activeEmail", googleUser.username)
-                .putString("user_phone_$activeEmail", googleUser.phone)
-                .putString("user_uid_$activeEmail", googleUser.gameUid)
-                .putString("user_ign_$activeEmail", googleUser.gameName)
-                .putInt("user_coins_$activeEmail", googleUser.coinBalance)
-                .putString("user_referral_code_$activeEmail", googleUser.referralCode)
+                .putString("user_username_$activeEmail", finalUser.username)
+                .putString("user_phone_$activeEmail", finalUser.phone)
+                .putString("user_uid_$activeEmail", finalUser.gameUid)
+                .putString("user_ign_$activeEmail", finalUser.gameName)
+                .putInt("user_coins_$activeEmail", finalUser.coinBalance)
+                .putString("user_referral_code_$activeEmail", finalUser.referralCode)
                 .apply()
 
             _activeUserId.value = activeEmail
             _isLoggedIn.value = true
 
-            val welcomeMsg = "Signed in as ${googleUser.email}!"
+            syncUserDataAndTransactionsForEmail(activeEmail)
+
+            val welcomeMsg = "Signed in as ${finalUser.email}!"
             _eventFlow.emit(UIEvent.ShowMessage(welcomeMsg))
             onResult(true, welcomeMsg)
         } else {
@@ -1203,21 +1194,71 @@ class TournamentViewModel(
         submitDepositRequest(amount, utr)
     }
 
-    fun syncUserDataAndTransactions() {
+    private var syncJobUser: Job? = null
+    private var syncJobTxns: Job? = null
+    private var syncJobBookings: Job? = null
+
+    fun syncUserDataAndTransactionsForEmail(email: String) {
+        val activeEmail = email.trim().lowercase()
+        if (activeEmail.isBlank()) return
+
         viewModelScope.launch {
-            val activeEmail = _activeUserId.value
-            if (activeEmail.isBlank()) return@launch
             try {
                 val remoteUser = firebaseRepository.fetchUserProfileFromFirestore(activeEmail)
                 if (remoteUser != null) {
                     repository.saveUserProfile(remoteUser)
-                    prefs.edit().putInt("user_coins_$activeEmail", remoteUser.coinBalance).apply()
+                    prefs.edit()
+                        .putString("user_username_$activeEmail", remoteUser.username)
+                        .putString("user_phone_$activeEmail", remoteUser.phone)
+                        .putString("user_uid_$activeEmail", remoteUser.gameUid)
+                        .putString("user_ign_$activeEmail", remoteUser.gameName)
+                        .putInt("user_coins_$activeEmail", remoteUser.coinBalance)
+                        .putString("user_referral_code_$activeEmail", remoteUser.referralCode)
+                        .apply()
+                } else {
+                    val localUser = repository.getUser(activeEmail).firstOrNull() ?: User(id = activeEmail, email = activeEmail)
+                    firebaseRepository.saveUserProfileToFirestore(localUser)
                 }
+
                 val remoteTxns = firebaseRepository.fetchUserTransactionsFromFirestore(activeEmail)
                 remoteTxns.forEach { repository.insertTransaction(it) }
+
+                val remoteBookings = firebaseRepository.fetchUserBookingsFromFirestore(activeEmail)
+                remoteBookings.forEach { repository.updateBooking(it) }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        syncJobUser?.cancel()
+        syncJobUser = viewModelScope.launch {
+            firebaseRepository.observeUserProfileFromFirestore(activeEmail).collect { remoteUser ->
+                if (remoteUser != null) {
+                    repository.saveUserProfile(remoteUser)
+                    prefs.edit().putInt("user_coins_$activeEmail", remoteUser.coinBalance).apply()
+                }
+            }
+        }
+
+        syncJobTxns?.cancel()
+        syncJobTxns = viewModelScope.launch {
+            firebaseRepository.observeUserTransactionsFromFirestore(activeEmail).collect { remoteTxns ->
+                remoteTxns.forEach { repository.insertTransaction(it) }
+            }
+        }
+
+        syncJobBookings?.cancel()
+        syncJobBookings = viewModelScope.launch {
+            firebaseRepository.observeUserBookingsFromFirestore(activeEmail).collect { remoteBookings ->
+                remoteBookings.forEach { repository.updateBooking(it) }
+            }
+        }
+    }
+
+    fun syncUserDataAndTransactions() {
+        val activeEmail = _activeUserId.value
+        if (activeEmail.isNotBlank()) {
+            syncUserDataAndTransactionsForEmail(activeEmail)
         }
     }
 

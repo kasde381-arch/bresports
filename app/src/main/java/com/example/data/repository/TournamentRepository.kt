@@ -30,7 +30,8 @@ class TournamentRepository(
     private val bookingDao: BookingDao,
     private val transactionDao: TransactionDao,
     private val supportMessageDao: SupportMessageDao,
-    private val appConfigDao: AppConfigDao
+    private val appConfigDao: AppConfigDao,
+    private val firebaseRepository: FirebaseRepository = FirebaseRepository()
 ) {
     val allMatches: Flow<List<Match>> = matchDao.getAllMatches()
     
@@ -63,6 +64,9 @@ class TournamentRepository(
     }
     
     suspend fun insertTransaction(transaction: WalletTransaction): Long {
+        if (transaction.userId.isNotBlank()) {
+            firebaseRepository.saveTransactionToFirestore(transaction)
+        }
         return transactionDao.insertTransaction(transaction)
     }
     
@@ -77,6 +81,10 @@ class TournamentRepository(
 
     suspend fun saveUserProfile(user: User) {
         userDao.insertOrUpdateUser(user)
+        val docId = user.email.ifBlank { user.id }.trim().lowercase()
+        if (docId.isNotBlank()) {
+            firebaseRepository.saveUserProfileToFirestore(user.copy(id = docId, email = user.email.ifBlank { docId }))
+        }
     }
 
     suspend fun createMatch(match: Match): Long {
@@ -123,9 +131,14 @@ class TournamentRepository(
 
         // Perform transactional operations
         val newBalance = user.coinBalance - entryFee
+        val updatedUser = user.copy(coinBalance = newBalance)
         userDao.updateCoinBalance(booking.userId, newBalance)
+        if (booking.userId.isNotBlank()) {
+            firebaseRepository.saveUserProfileToFirestore(updatedUser)
+        }
         
         bookingDao.insertBooking(booking)
+        firebaseRepository.saveBookingToFirestore(booking)
         
         val updatedMatch = match.copy(slotsBooked = match.slotsBooked + 1)
         matchDao.updateMatch(updatedMatch)
@@ -144,6 +157,7 @@ class TournamentRepository(
             timestamp = System.currentTimeMillis()
         )
         transactionDao.insertTransaction(entryFeeTxn)
+        firebaseRepository.saveTransactionToFirestore(entryFeeTxn)
         
         return BookingResult.Success("Successfully booked slot in '${match.title}'!")
     }
@@ -164,7 +178,11 @@ class TournamentRepository(
         bookingDao.cancelBooking(matchId, userId)
         
         val newBalance = user.coinBalance + entryFee
+        val updatedUser = user.copy(coinBalance = newBalance)
         userDao.updateCoinBalance(userId, newBalance)
+        if (userId.isNotBlank()) {
+            firebaseRepository.saveUserProfileToFirestore(updatedUser)
+        }
 
         val updatedMatch = match.copy(slotsBooked = (match.slotsBooked - 1).coerceAtLeast(0))
         matchDao.updateMatch(updatedMatch)
@@ -182,12 +200,14 @@ class TournamentRepository(
             timestamp = System.currentTimeMillis()
         )
         transactionDao.insertTransaction(refundTxn)
+        firebaseRepository.saveTransactionToFirestore(refundTxn)
 
         return BookingResult.Success("Registration cancelled and $entryFee coins refunded!")
     }
 
     suspend fun updateBooking(booking: Booking) {
         bookingDao.insertBooking(booking)
+        firebaseRepository.saveBookingToFirestore(booking)
     }
 
     /**
