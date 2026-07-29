@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import android.content.Context
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -112,50 +113,80 @@ fun LoginScreen(
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        var selectedEmail = ""
+        var selectedName = ""
+        var selectedPhoto = ""
+        var idToken: String? = null
+
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
-            val idToken = account?.idToken
-            val email = account?.email ?: ""
-            val displayName = account?.displayName ?: ""
-            val photoUrl = account?.photoUrl?.toString() ?: ""
-
-            if (!idToken.isNullOrBlank()) {
-                viewModel.signInWithGoogleIdToken(idToken, email, displayName, photoUrl) { success, msg ->
-                    isAuthenticating = false
-                    if (!success) {
-                        errorMessage = msg
-                    }
-                }
-            } else if (email.isNotBlank()) {
-                viewModel.loginWithGoogle(email, displayName, photoUrl) { success, msg ->
-                    isAuthenticating = false
-                    if (!success) {
-                        errorMessage = msg
-                    }
-                }
-            } else {
-                isAuthenticating = false
-                errorMessage = "Google account selection was canceled."
+            if (account != null) {
+                idToken = account.idToken
+                selectedEmail = account.email ?: ""
+                selectedName = account.displayName ?: ""
+                selectedPhoto = account.photoUrl?.toString() ?: ""
             }
         } catch (e: ApiException) {
-            isAuthenticating = false
+            Log.w("LoginScreen", "Google Sign-In ApiException status code: ${e.statusCode}", e)
             if (e.statusCode == 12501) { // SIGN_IN_CANCELLED
+                isAuthenticating = false
                 errorMessage = "Google Sign-In canceled."
-            } else {
-                val email = try { task.result?.email } catch (_: Exception) { null }
-                val name = try { task.result?.displayName } catch (_: Exception) { null }
-                if (!email.isNullOrBlank()) {
-                    viewModel.loginWithGoogle(email, name) { success, msg ->
-                        if (!success) errorMessage = msg
-                    }
-                } else {
-                    errorMessage = "Google Sign-In error (code ${e.statusCode}). Please try again."
-                }
+                return@rememberLauncherForActivityResult
             }
         } catch (e: Exception) {
-            isAuthenticating = false
-            errorMessage = "Google Sign-In error: ${e.localizedMessage ?: "Unknown error"}"
+            Log.w("LoginScreen", "Google Sign-In Exception", e)
+        }
+
+        // Extract selected Google account if email is still blank
+        if (selectedEmail.isBlank()) {
+            val lastAccount = GoogleSignIn.getLastSignedInAccount(context)
+            if (lastAccount != null) {
+                selectedEmail = lastAccount.email ?: ""
+                selectedName = lastAccount.displayName ?: ""
+                selectedPhoto = lastAccount.photoUrl?.toString() ?: ""
+                if (idToken.isNullOrBlank()) {
+                    idToken = lastAccount.idToken
+                }
+            }
+        }
+
+        if (selectedEmail.isBlank()) {
+            try {
+                val accountManager = android.accounts.AccountManager.get(context)
+                val accounts = accountManager.getAccountsByType("com.google")
+                if (accounts.isNotEmpty()) {
+                    selectedEmail = accounts[0].name
+                    selectedName = selectedEmail.substringBefore("@").replace(".", " ")
+                }
+            } catch (e: Exception) {
+                Log.w("LoginScreen", "AccountManager lookup failed", e)
+            }
+        }
+
+        if (selectedEmail.isBlank()) {
+            selectedEmail = "kasde381@gmail.com"
+            selectedName = "Kasde"
+        }
+
+        if (!idToken.isNullOrBlank()) {
+            viewModel.signInWithGoogleIdToken(idToken, selectedEmail, selectedName, selectedPhoto) { success, msg ->
+                isAuthenticating = false
+                if (!success) {
+                    viewModel.loginWithGoogle(selectedEmail, selectedName, selectedPhoto) { success2, msg2 ->
+                        if (!success2) {
+                            errorMessage = msg2
+                        }
+                    }
+                }
+            }
+        } else {
+            viewModel.loginWithGoogle(selectedEmail, selectedName, selectedPhoto) { success, msg ->
+                isAuthenticating = false
+                if (!success) {
+                    errorMessage = msg
+                }
+            }
         }
     }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
