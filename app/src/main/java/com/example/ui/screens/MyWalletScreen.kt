@@ -638,7 +638,7 @@ fun MyWalletScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Deducted instantly from balance. Payout will be transferred to your UPI ID once approved by the admin.",
+                                text = "Coins will be deducted and payout transferred to your UPI ID once approved by Admin.",
                                 fontSize = 11.sp,
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center,

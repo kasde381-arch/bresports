@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.model.Booking
 import com.example.data.model.DepositRequest
+import com.example.data.model.WalletRequest
 import com.example.data.model.User
 import com.example.data.model.WalletTransaction
 import com.google.firebase.FirebaseApp
@@ -677,205 +678,308 @@ class FirebaseRepository {
         }
     }
 
-    suspend fun saveDepositRequestToFirestore(depositRequest: DepositRequest): String? {
+    suspend fun saveWalletRequestToFirestore(request: WalletRequest): String? {
         val firestore = db ?: return null
         return try {
             val map = hashMapOf(
-                "userId" to depositRequest.userId,
-                "userName" to depositRequest.userName,
-                "amount" to depositRequest.amount,
-                "utrNumber" to depositRequest.utrNumber,
-                "status" to depositRequest.status,
-                "timestamp" to depositRequest.timestamp
+                "userId" to request.userId,
+                "userEmail" to request.userEmail,
+                "type" to request.type,
+                "amount" to request.amount,
+                "utrOrPaymentDetails" to request.utrOrPaymentDetails,
+                "status" to "PENDING",
+                "timestamp" to request.timestamp
             )
-            val docRef = firestore.collection("deposit_requests").add(map).await()
-            docRef.id
+            val docRef = firestore.collection("requests").add(map).await()
+            val docId = docRef.id
+            
+            try {
+                firestore.collection("wallet_requests").document(docId).set(map).await()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            if (request.type.equals("DEPOSIT", ignoreCase = true)) {
+                try {
+                    val depMap = hashMapOf(
+                        "userId" to request.userId,
+                        "userName" to request.userEmail,
+                        "amount" to request.amount.toInt(),
+                        "utrNumber" to request.utrOrPaymentDetails,
+                        "status" to "PENDING",
+                        "timestamp" to request.timestamp
+                    )
+                    firestore.collection("deposit_requests").document(docId).set(depMap).await()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            docId
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
     }
 
-    suspend fun fetchDepositRequestsFromFirestore(): List<DepositRequest> {
+    suspend fun fetchPendingWalletRequestsFromFirestore(): List<WalletRequest> {
         val firestore = db ?: return emptyList()
-        return try {
-            val snapshot = firestore.collection("deposit_requests").get().await()
-            snapshot.documents.mapNotNull { doc ->
-                val data = doc.data ?: return@mapNotNull null
-                val rawAmt = data["amount"]
-                val amt = when (rawAmt) {
-                    is Number -> rawAmt.toInt()
-                    is String -> rawAmt.toIntOrNull() ?: 0
-                    else -> 0
+        val list = mutableListOf<WalletRequest>()
+        val seenIds = mutableSetOf<String>()
+
+        val collections = listOf("requests", "wallet_requests", "deposit_requests")
+        for (col in collections) {
+            try {
+                val snapshot = firestore.collection(col).get().await()
+                for (doc in snapshot.documents) {
+                    if (seenIds.contains(doc.id)) continue
+                    val data = doc.data ?: continue
+                    val status = (data["status"] as? String ?: "PENDING").uppercase()
+                    if (status != "PENDING") continue
+
+                    val userId = data["userId"] as? String ?: ""
+                    val userEmail = data["userEmail"] as? String ?: (data["userName"] as? String ?: userId)
+                    val rawType = (data["type"] as? String ?: "DEPOSIT").uppercase()
+                    val type = if (rawType == "WITHDRAWAL" || rawType == "WITHDRAW") "WITHDRAWAL" else "DEPOSIT"
+                    val rawAmt = data["amount"]
+                    val amount = when (rawAmt) {
+                        is Number -> rawAmt.toDouble()
+                        is String -> rawAmt.toDoubleOrNull() ?: 0.0
+                        else -> 0.0
+                    }
+                    val utrOrDetails = (data["utrOrPaymentDetails"] as? String)
+                        ?.ifBlank { null }
+                        ?: (data["utrNumber"] as? String ?: (data["accountDetail"] as? String ?: ""))
+                    val rawTs = data["timestamp"]
+                    val ts = when (rawTs) {
+                        is Number -> rawTs.toLong()
+                        is String -> rawTs.toLongOrNull() ?: System.currentTimeMillis()
+                        else -> System.currentTimeMillis()
+                    }
+
+                    seenIds.add(doc.id)
+                    list.add(
+                        WalletRequest(
+                            id = doc.id,
+                            userId = userId,
+                            userEmail = userEmail,
+                            type = type,
+                            amount = amount,
+                            utrOrPaymentDetails = utrOrDetails,
+                            status = "PENDING",
+                            timestamp = ts
+                        )
+                    )
                 }
-                val rawTs = data["timestamp"]
-                val ts = when (rawTs) {
-                    is Number -> rawTs.toLong()
-                    is String -> rawTs.toLongOrNull() ?: System.currentTimeMillis()
-                    else -> System.currentTimeMillis()
-                }
-                DepositRequest(
-                    id = doc.id,
-                    userId = data["userId"] as? String ?: "",
-                    userName = data["userName"] as? String ?: "",
-                    amount = amt,
-                    utrNumber = data["utrNumber"] as? String ?: "",
-                    status = data["status"] as? String ?: "PENDING",
-                    timestamp = ts
-                )
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
+        }
+        return list.sortedByDescending { it.timestamp }
+    }
+
+    private suspend fun updateUserCoinBalanceInFirestore(
+        userEmail: String,
+        userId: String,
+        amount: Double,
+        isDeposit: Boolean
+    ) {
+        val firestore = db ?: return
+        val emailClean = userEmail.trim().lowercase()
+        val userIdClean = userId.trim().lowercase()
+
+        val docIdsToTry = listOf(emailClean, userIdClean, userEmail.trim(), userId.trim())
+            .distinct()
+            .filter { it.isNotBlank() }
+
+        var updated = false
+
+        for (docId in docIdsToTry) {
+            val userRef = firestore.collection("users").document(docId)
+            val snap = userRef.get().await()
+            if (snap.exists()) {
+                val currentCoin = (snap.get("coinBalance") as? Number)?.toDouble() ?: 0.0
+                val newCoin = if (isDeposit) {
+                    currentCoin + amount
+                } else {
+                    (currentCoin - amount).coerceAtLeast(0.0)
+                }
+                userRef.set(
+                    mapOf(
+                        "coinBalance" to newCoin.toInt(),
+                        "walletBalance" to newCoin.toInt()
+                    ),
+                    SetOptions.merge()
+                ).await()
+                updated = true
+                Log.d("FirestoreBalance", "Updated user [$docId] coinBalance to $newCoin")
+                break
+            }
+        }
+
+        if (!updated && emailClean.isNotBlank()) {
+            val querySnap = firestore.collection("users")
+                .whereEqualTo("email", emailClean)
+                .get()
+                .await()
+            for (doc in querySnap.documents) {
+                val currentCoin = (doc.get("coinBalance") as? Number)?.toDouble() ?: 0.0
+                val newCoin = if (isDeposit) {
+                    currentCoin + amount
+                } else {
+                    (currentCoin - amount).coerceAtLeast(0.0)
+                }
+                doc.reference.set(
+                    mapOf(
+                        "coinBalance" to newCoin.toInt(),
+                        "walletBalance" to newCoin.toInt()
+                    ),
+                    SetOptions.merge()
+                ).await()
+                updated = true
+            }
+        }
+
+        if (!updated && emailClean.isNotBlank()) {
+            val initCoin = if (isDeposit) amount.toInt() else 0
+            firestore.collection("users").document(emailClean).set(
+                mapOf(
+                    "id" to emailClean,
+                    "email" to userEmail,
+                    "coinBalance" to initCoin,
+                    "walletBalance" to initCoin
+                ),
+                SetOptions.merge()
+            ).await()
         }
     }
 
-    suspend fun updateDepositRequestStatusInFirestore(requestId: String, status: String) {
-        val firestore = db ?: return
+    suspend fun approveWalletRequestInFirestore(request: WalletRequest): Boolean {
+        val firestore = db ?: return false
+        val reqId = request.id.trim()
+        val userEmail = request.userEmail.ifBlank { request.userName }.ifBlank { request.userId }.trim()
+
+        Log.d("RequestApproval", "Approving request: id=$reqId, email=$userEmail, type=${request.type}, amount=${request.amount}")
+
         try {
-            if (requestId.isNotBlank()) {
-                firestore.collection("deposit_requests")
-                    .document(requestId)
-                    .update("status", status)
-                    .await()
+            val collections = listOf("requests", "wallet_requests", "deposit_requests")
+            if (reqId.isNotBlank()) {
+                for (col in collections) {
+                    try {
+                        firestore.collection(col).document(reqId).update("status", "APPROVED").await()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
             }
+            if (request.utrOrPaymentDetails.isNotBlank()) {
+                for (col in collections) {
+                    try {
+                        val matchingDocs = firestore.collection(col)
+                            .whereEqualTo("utrOrPaymentDetails", request.utrOrPaymentDetails)
+                            .get()
+                            .await()
+                        for (d in matchingDocs.documents) {
+                            d.reference.update("status", "APPROVED").await()
+                        }
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+
+            val isDeposit = request.type.equals("DEPOSIT", ignoreCase = true)
+            updateUserCoinBalanceInFirestore(userEmail, request.userId, request.amount, isDeposit)
+
+            if (request.utrOrPaymentDetails.isNotBlank()) {
+                val existingTxns = firestore.collection("transactions")
+                    .whereEqualTo("transactionRef", request.utrOrPaymentDetails)
+                    .get()
+                    .await()
+                for (doc in existingTxns.documents) {
+                    doc.reference.update("status", "SUCCESS").await()
+                }
+            }
+            return true
         } catch (e: Exception) {
             e.printStackTrace()
+            return false
+        }
+    }
+
+    suspend fun rejectWalletRequestInFirestore(request: WalletRequest): Boolean {
+        val firestore = db ?: return false
+        val reqId = request.id.trim()
+
+        try {
+            val collections = listOf("requests", "wallet_requests", "deposit_requests")
+            if (reqId.isNotBlank()) {
+                for (col in collections) {
+                    try {
+                        firestore.collection(col).document(reqId).update("status", "REJECTED").await()
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+            if (request.utrOrPaymentDetails.isNotBlank()) {
+                for (col in collections) {
+                    try {
+                        val matchingDocs = firestore.collection(col)
+                            .whereEqualTo("utrOrPaymentDetails", request.utrOrPaymentDetails)
+                            .get()
+                            .await()
+                        for (d in matchingDocs.documents) {
+                            d.reference.update("status", "REJECTED").await()
+                        }
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+            if (request.utrOrPaymentDetails.isNotBlank()) {
+                val existingTxns = firestore.collection("transactions")
+                    .whereEqualTo("transactionRef", request.utrOrPaymentDetails)
+                    .get()
+                    .await()
+                for (doc in existingTxns.documents) {
+                    doc.reference.update("status", "FAILED").await()
+                }
+            }
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+    }
+
+    suspend fun saveDepositRequestToFirestore(depositRequest: DepositRequest): String? {
+        val req = WalletRequest(
+            id = depositRequest.id,
+            userId = depositRequest.userId,
+            userEmail = depositRequest.userName.ifBlank { depositRequest.userId },
+            type = "DEPOSIT",
+            amount = depositRequest.amount,
+            utrOrPaymentDetails = depositRequest.utrNumber,
+            status = depositRequest.status,
+            timestamp = depositRequest.timestamp
+        )
+        return saveWalletRequestToFirestore(req)
+    }
+
+    suspend fun fetchDepositRequestsFromFirestore(): List<DepositRequest> {
+        return fetchPendingWalletRequestsFromFirestore()
+    }
+
+    suspend fun updateDepositRequestStatusInFirestore(requestId: String, status: String) {
+        val req = WalletRequest(id = requestId, status = status)
+        if (status.equals("APPROVED", ignoreCase = true) || status.equals("SUCCESS", ignoreCase = true)) {
+            approveWalletRequestInFirestore(req)
+        } else if (status.equals("REJECTED", ignoreCase = true)) {
+            rejectWalletRequestInFirestore(req)
         }
     }
 
     suspend fun approveDepositRequestInFirestore(depositRequest: DepositRequest) {
-        val firestore = db ?: return
-        val reqId = depositRequest.id.trim()
-        val userIdRaw = depositRequest.userId.trim()
-        val userIdLower = userIdRaw.lowercase()
-        val amountLong = depositRequest.amount.toLong()
-
-        Log.d("DepositApproval", "Starting deposit approval: reqId=$reqId, userId=$userIdRaw, amount=$amountLong, utr=${depositRequest.utrNumber}")
-
-        try {
-            // 1. Update deposit request status to 'SUCCESS' in Firestore deposit_requests collection
-            if (reqId.isNotBlank()) {
-                firestore.collection("deposit_requests")
-                    .document(reqId)
-                    .update("status", "SUCCESS")
-                    .await()
-            }
-            if (depositRequest.utrNumber.isNotBlank()) {
-                val matchingDocs = firestore.collection("deposit_requests")
-                    .whereEqualTo("utrNumber", depositRequest.utrNumber)
-                    .get()
-                    .await()
-                for (d in matchingDocs.documents) {
-                    d.reference.update("status", "SUCCESS").await()
-                }
-            }
-
-            // 2. Increment user balance in users collection
-            val docIdsToTry = listOf(userIdLower, userIdRaw).distinct().filter { it.isNotBlank() }
-            var userDocUpdated = false
-
-            for (docId in docIdsToTry) {
-                val userRef = firestore.collection("users").document(docId)
-                val snap = userRef.get().await()
-                if (snap.exists()) {
-                    val currentCoin = (snap.get("coinBalance") as? Number)?.toLong() ?: 0L
-                    val currentWallet = (snap.get("walletBalance") as? Number)?.toLong() ?: currentCoin
-                    userRef.set(
-                        mapOf(
-                            "coinBalance" to (currentCoin + amountLong),
-                            "walletBalance" to (currentWallet + amountLong)
-                        ),
-                        SetOptions.merge()
-                    ).await()
-                    userDocUpdated = true
-                    Log.d("DepositApproval", "Successfully updated user doc [$docId]: oldCoin=$currentCoin -> newCoin=${currentCoin + amountLong}")
-                    break
-                }
-            }
-
-            // Fallback: If user document wasn't found directly by doc ID, search by email or id
-            if (!userDocUpdated && userIdRaw.isNotBlank()) {
-                val querySnap = firestore.collection("users")
-                    .whereEqualTo("email", userIdRaw)
-                    .get()
-                    .await()
-                if (!querySnap.isEmpty) {
-                    for (doc in querySnap.documents) {
-                        val currentCoin = (doc.get("coinBalance") as? Number)?.toLong() ?: 0L
-                        val currentWallet = (doc.get("walletBalance") as? Number)?.toLong() ?: currentCoin
-                        doc.reference.set(
-                            mapOf(
-                                "coinBalance" to (currentCoin + amountLong),
-                                "walletBalance" to (currentWallet + amountLong)
-                            ),
-                            SetOptions.merge()
-                        ).await()
-                        userDocUpdated = true
-                        Log.d("DepositApproval", "Successfully updated user doc by email query [${doc.id}]: newCoin=${currentCoin + amountLong}")
-                    }
-                }
-            }
-
-            // Create document if user record did not exist
-            if (!userDocUpdated && userIdLower.isNotBlank()) {
-                firestore.collection("users").document(userIdLower).set(
-                    mapOf(
-                        "id" to userIdLower,
-                        "email" to userIdRaw,
-                        "coinBalance" to amountLong,
-                        "walletBalance" to amountLong
-                    ),
-                    SetOptions.merge()
-                ).await()
-                Log.d("DepositApproval", "Created new user doc [$userIdLower] with initial balance = $amountLong")
-            }
-
-            // 3. Create or update transaction record in transactions collection
-            val txnMap = hashMapOf(
-                "userId" to userIdLower,
-                "userEmail" to userIdRaw,
-                "type" to "DEPOSIT",
-                "amount" to depositRequest.amount,
-                "title" to "Deposit Request (+${depositRequest.amount} Coins)",
-                "timestamp" to System.currentTimeMillis(),
-                "paymentMethod" to "UPI QR (anil612@fam)",
-                "accountDetail" to "UTR: ${depositRequest.utrNumber}",
-                "status" to "SUCCESS",
-                "reference" to depositRequest.utrNumber,
-                "transactionRef" to depositRequest.utrNumber
-            )
-
-            if (depositRequest.utrNumber.isNotBlank()) {
-                val existingTxns = firestore.collection("transactions")
-                    .whereEqualTo("transactionRef", depositRequest.utrNumber)
-                    .get()
-                    .await()
-
-                if (!existingTxns.isEmpty) {
-                    for (doc in existingTxns.documents) {
-                        doc.reference.update(
-                            mapOf(
-                                "status" to "SUCCESS",
-                                "amount" to depositRequest.amount,
-                                "type" to "DEPOSIT"
-                            )
-                        ).await()
-                    }
-                    Log.d("DepositApproval", "Updated existing transaction status to SUCCESS for UTR ${depositRequest.utrNumber}")
-                } else {
-                    firestore.collection("transactions").add(txnMap).await()
-                    Log.d("DepositApproval", "Created new transaction doc for UTR ${depositRequest.utrNumber}")
-                }
-            } else {
-                firestore.collection("transactions").add(txnMap).await()
-            }
-
-            Log.d("DepositApproval", "Deposit Approval Completed Successfully for request ID $reqId")
-        } catch (e: Exception) {
-            Log.e("DepositApproval", "Error executing deposit approval in Firestore", e)
-            e.printStackTrace()
-        }
+        approveWalletRequestInFirestore(depositRequest)
     }
 
     suspend fun incrementUserWalletInFirestore(userId: String, amount: Int) {

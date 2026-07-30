@@ -113,13 +113,24 @@ data class AppUpdateInfo(
     val errorMessage: String? = null
 )
 
-data class DepositRequest(
+data class WalletRequest(
     val id: String = "",
     val userId: String = "",
+    val userEmail: String = "",
+    val type: String = "DEPOSIT", // "DEPOSIT" or "WITHDRAWAL"
+    val amount: Double = 0.0,
+    val utrOrPaymentDetails: String = "",
+    val status: String = "PENDING", // PENDING, APPROVED, REJECTED
+    val timestamp: Long = System.currentTimeMillis(),
     val userName: String = "",
-    val amount: Int = 0,
-    val utrNumber: String = "",
-    val status: String = "PENDING", // PENDING, SUCCESS, REJECTED
-    val timestamp: Long = System.currentTimeMillis()
-)
+    val utrNumber: String = ""
+) {
+    val displayEmail: String
+        get() = userEmail.ifBlank { userName }.ifBlank { userId }
+
+    val displayDetails: String
+        get() = utrOrPaymentDetails.ifBlank { utrNumber }
+}
+
+typealias DepositRequest = WalletRequest
 

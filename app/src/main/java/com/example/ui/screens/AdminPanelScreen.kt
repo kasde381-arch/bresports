@@ -33,6 +33,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import com.example.data.model.Match
+import com.example.data.model.WalletRequest
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.TournamentViewModel
 import java.text.SimpleDateFormat
@@ -398,11 +399,11 @@ fun AdminPanelScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // ------------------ PENDING DEPOSIT REQUESTS (RECEIVED) SECTION ------------------
+                    // ------------------ PENDING WALLET REQUESTS SECTION ------------------
                     val totalPendingDepositCount = pendingFirestoreRequests.size + pendingDeposits.size
                     item {
                         Text(
-                            text = "PENDING DEPOSIT REQUESTS (RECEIVED) ($totalPendingDepositCount)",
+                            text = "PENDING WALLET REQUESTS ($totalPendingDepositCount)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = GoldBooyah,
@@ -453,15 +454,21 @@ fun AdminPanelScreen(
                             }
                         }
                     } else {
-                        // Render Firestore deposit_requests collection items
+                        // Render Firestore requests collection items
                         items(pendingFirestoreRequests, key = { "req_${it.id}" }) { req ->
+                            val isDeposit = req.type.equals("DEPOSIT", ignoreCase = true)
+                            val titleText = if (isDeposit) "Deposit Request (Firestore)" else "Withdrawal Request (Firestore)"
+                            val amountText = if (isDeposit) "₹${req.amount.toInt()} (+${req.amount.toInt()} Coins)" else "₹${req.amount.toInt()} (-${req.amount.toInt()} Coins)"
+                            val amountColor = if (isDeposit) Color(0xFF4CAF50) else Color(0xFFFF5252)
+                            val detailsLabel = if (isDeposit) "12-Digit UTR: ${req.displayDetails}" else "UPI / Account: ${req.displayDetails}"
+
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = SlateDarkSurface),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 12.dp)
-                                    .border(1.5.dp, FireOrange.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                    .border(1.5.dp, if (isDeposit) FireOrange.copy(alpha = 0.8f) else GoldBooyah.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(
@@ -471,13 +478,13 @@ fun AdminPanelScreen(
                                     ) {
                                         Column {
                                             Text(
-                                                text = "Deposit Request (Firestore)",
+                                                text = titleText,
                                                 fontWeight = FontWeight.Bold,
-                                                color = FireOrange,
+                                                color = if (isDeposit) FireOrange else GoldBooyah,
                                                 fontSize = 13.sp
                                             )
                                             Text(
-                                                text = "User: ${req.userName}",
+                                                text = "User: ${req.displayEmail}",
                                                 fontWeight = FontWeight.Black,
                                                 color = TextPrimary,
                                                 fontSize = 15.sp
@@ -485,9 +492,9 @@ fun AdminPanelScreen(
                                         }
                                         
                                         Text(
-                                            text = "₹${req.amount} (+${req.amount} Coins)",
+                                            text = amountText,
                                             fontWeight = FontWeight.Black,
-                                            color = Color(0xFF4CAF50),
+                                            color = amountColor,
                                             fontSize = 16.sp
                                         )
                                     }
@@ -506,7 +513,7 @@ fun AdminPanelScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "User ID: ${req.userId}",
+                                            text = "User ID: ${req.userId.ifBlank { req.userEmail }}",
                                             fontSize = 12.sp,
                                             color = TextPrimary,
                                             fontWeight = FontWeight.SemiBold
@@ -525,7 +532,7 @@ fun AdminPanelScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "12-Digit UTR: ${req.utrNumber}",
+                                            text = detailsLabel,
                                             fontSize = 13.sp,
                                             color = GoldBooyah,
                                             fontWeight = FontWeight.Bold
@@ -546,26 +553,26 @@ fun AdminPanelScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { viewModel.approveDepositRequest(req) },
+                                            onClick = { viewModel.approveWalletRequest(req) },
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
                                             shape = RoundedCornerShape(8.dp),
                                             modifier = Modifier
-                                                .testTag("approve_deposit_request_button")
+                                                .testTag("approve_wallet_request_button")
                                                 .weight(1.3f)
                                                 .height(40.dp)
                                         ) {
                                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("APPROVE DEPOSIT", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text(if (isDeposit) "APPROVE DEPOSIT" else "APPROVE WITHDRAWAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
                                         
                                         OutlinedButton(
-                                            onClick = { viewModel.rejectDepositRequest(req) },
+                                            onClick = { viewModel.rejectWalletRequest(req) },
                                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350)),
                                             border = BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.5f)),
                                             shape = RoundedCornerShape(8.dp),
                                             modifier = Modifier
-                                                .testTag("decline_deposit_request_button")
+                                                .testTag("decline_wallet_request_button")
                                                 .weight(0.7f)
                                                 .height(40.dp)
                                         ) {

@@ -9,12 +9,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.Booking
 import com.example.data.model.DepositRequest
+import com.example.data.model.WalletRequest
 import com.example.data.model.Match
 import com.example.data.model.User
 import com.example.data.model.WalletTransaction
 import com.example.data.repository.BookingResult
 import com.example.data.repository.TournamentRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +38,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Job
 import android.content.Intent
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -1146,14 +1147,14 @@ class TournamentViewModel(
         }
     }
 
-    private val _depositRequests = MutableStateFlow<List<DepositRequest>>(emptyList())
-    val depositRequests: StateFlow<List<DepositRequest>> = _depositRequests.asStateFlow()
+    private val _depositRequests = MutableStateFlow<List<WalletRequest>>(emptyList())
+    val depositRequests: StateFlow<List<WalletRequest>> = _depositRequests.asStateFlow()
 
     fun fetchPendingDepositRequests() {
         viewModelScope.launch {
             try {
-                val requests = firebaseRepository.fetchDepositRequestsFromFirestore()
-                _depositRequests.value = requests.sortedByDescending { it.timestamp }
+                val requests = firebaseRepository.fetchPendingWalletRequestsFromFirestore()
+                _depositRequests.value = requests
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -1167,6 +1168,8 @@ class TournamentViewModel(
     ) {
         val cleanUtr = utrNumber.trim()
         val currentUserId = _activeUserId.value
+        val currentUser = user.value ?: User(id = currentUserId)
+        val userEmail = currentUser.email.ifBlank { currentUserId }
 
         if (cleanUtr.isBlank()) {
             val msg = "Please enter 12-Digit UTR / Transaction ID"
@@ -1176,12 +1179,11 @@ class TournamentViewModel(
         }
 
         viewModelScope.launch {
-            // Check local duplicate UTR
             val localDuplicate = transactions.value.any {
                 it.transactionRef.trim().equals(cleanUtr, ignoreCase = true) ||
                 it.accountDetail.contains(cleanUtr, ignoreCase = true)
             } || _depositRequests.value.any {
-                it.utrNumber.trim().equals(cleanUtr, ignoreCase = true)
+                it.utrOrPaymentDetails.trim().equals(cleanUtr, ignoreCase = true)
             }
 
             if (localDuplicate) {
@@ -1191,7 +1193,6 @@ class TournamentViewModel(
                 return@launch
             }
 
-            // Check remote Firestore duplicate UTR
             val isRemoteDuplicate = firebaseRepository.isUtrAlreadySubmitted(currentUserId, cleanUtr)
             if (isRemoteDuplicate) {
                 val msg = "This UTR has already been submitted."
@@ -1200,26 +1201,22 @@ class TournamentViewModel(
                 return@launch
             }
 
-            val currentUser = user.value
-            val userName = currentUser?.gameName?.ifBlank { currentUser.username }?.ifBlank { currentUserId } ?: currentUserId
-
-            val request = DepositRequest(
+            val request = WalletRequest(
                 userId = currentUserId,
-                userName = userName,
-                amount = amount,
-                utrNumber = cleanUtr,
+                userEmail = userEmail,
+                type = "DEPOSIT",
+                amount = amount.toDouble(),
+                utrOrPaymentDetails = cleanUtr,
                 status = "PENDING",
                 timestamp = System.currentTimeMillis()
             )
 
-            // 1. Save to Firestore deposit_requests collection
             try {
-                firebaseRepository.saveDepositRequestToFirestore(request)
+                firebaseRepository.saveWalletRequestToFirestore(request)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
-            // 2. Save transaction locally & to Firestore
             val txn = WalletTransaction(
                 userId = currentUserId,
                 type = "DEPOSIT",
@@ -1240,7 +1237,82 @@ class TournamentViewModel(
 
             fetchPendingDepositRequests()
 
-            val successMsg = "Request submitted successfully! Waiting for Admin approval."
+            val successMsg = "Deposit request submitted successfully! Waiting for Admin approval."
+            _eventFlow.emit(UIEvent.ShowMessage(successMsg))
+            onResult?.invoke(true, successMsg)
+        }
+    }
+
+    fun submitWithdrawalRequest(
+        amount: Int,
+        upiId: String,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        val cleanUpi = upiId.trim()
+        val currentUserId = _activeUserId.value
+        val currentUser = user.value ?: User(id = currentUserId)
+        val userEmail = currentUser.email.ifBlank { currentUserId }
+
+        if (amount < 100) {
+            val msg = "Minimum withdrawal is 100 coins"
+            viewModelScope.launch { _eventFlow.emit(UIEvent.ShowMessage(msg)) }
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        if (currentUser.coinBalance < amount) {
+            val msg = "Insufficient Coin Balance. Please Deposit Coins First."
+            viewModelScope.launch { _eventFlow.emit(UIEvent.ShowMessage(msg)) }
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        if (cleanUpi.isBlank() || !cleanUpi.contains("@")) {
+            val msg = "Please enter a valid UPI ID"
+            viewModelScope.launch { _eventFlow.emit(UIEvent.ShowMessage(msg)) }
+            onResult?.invoke(false, msg)
+            return
+        }
+
+        viewModelScope.launch {
+            val request = WalletRequest(
+                userId = currentUserId,
+                userEmail = userEmail,
+                type = "WITHDRAWAL",
+                amount = amount.toDouble(),
+                utrOrPaymentDetails = cleanUpi,
+                status = "PENDING",
+                timestamp = System.currentTimeMillis()
+            )
+
+            try {
+                firebaseRepository.saveWalletRequestToFirestore(request)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val txnRef = "WTH" + (100000..999999).random()
+            val txn = WalletTransaction(
+                userId = currentUserId,
+                type = "WITHDRAWAL",
+                amount = amount,
+                title = "Withdrawal Request ($cleanUpi)",
+                paymentMethod = "UPI Cashout",
+                accountDetail = cleanUpi,
+                status = "PENDING",
+                transactionRef = txnRef,
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertTransaction(txn)
+            try {
+                firebaseRepository.saveTransactionToFirestore(txn)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            fetchPendingDepositRequests()
+
+            val successMsg = "Withdrawal request of $amount coins submitted! Waiting for Admin approval."
             _eventFlow.emit(UIEvent.ShowMessage(successMsg))
             onResult?.invoke(true, successMsg)
         }
@@ -1318,44 +1390,53 @@ class TournamentViewModel(
         }
     }
 
-    fun approveDepositRequest(request: DepositRequest) {
-        viewModelScope.launch {
-            // Optimistically update deposit requests state so pending item disappears immediately from Admin Panel
-            _depositRequests.value = _depositRequests.value.filter {
-                it.id != request.id && (it.utrNumber.isBlank() || it.utrNumber != request.utrNumber)
-            }
+    fun withdrawCoins(amount: Int, paymentMethod: String, accountDetail: String): Boolean {
+        submitWithdrawalRequest(amount, accountDetail)
+        return true
+    }
 
-            // 1. Run full Firestore approval (deposit_requests status->SUCCESS, increment user balance, add/update transaction)
+    fun approveWalletRequest(request: WalletRequest) {
+        viewModelScope.launch {
+            _depositRequests.value = _depositRequests.value.filter { it.id != request.id }
+
             try {
-                firebaseRepository.approveDepositRequestInFirestore(request)
+                firebaseRepository.approveWalletRequestInFirestore(request)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
-            // 2. Update local target user wallet balance in Room & SharedPreferences
-            val targetUserId = request.userId.trim()
-            val targetUser = repository.getUser(targetUserId).firstOrNull() ?: User(id = targetUserId)
-            val newBalance = targetUser.coinBalance + request.amount
+            val targetUserId = request.userId.trim().ifBlank { request.userEmail.trim() }
+            val targetUser = repository.getUser(targetUserId).firstOrNull() 
+                ?: repository.getUser(request.userEmail.trim()).firstOrNull()
+                ?: User(id = targetUserId, email = request.userEmail)
 
-            val updatedUser = targetUser.copy(id = targetUserId, coinBalance = newBalance)
+            val amountInt = request.amount.toInt()
+            val newBalance = if (request.type.equals("DEPOSIT", ignoreCase = true)) {
+                targetUser.coinBalance + amountInt
+            } else {
+                (targetUser.coinBalance - amountInt).coerceAtLeast(0)
+            }
+
+            val updatedUser = targetUser.copy(id = targetUser.id, coinBalance = newBalance)
             repository.saveUserProfile(updatedUser)
-            prefs.edit().putInt("user_coins_$targetUserId", newBalance).apply()
+            prefs.edit().putInt("user_coins_${targetUser.id}", newBalance).apply()
 
-            // 3. Update or Insert transaction in local Room database with status = SUCCESS
-            val matchingTxns = repository.getTransactionsForUser(targetUserId).firstOrNull() ?: emptyList()
-            val matchingTxn = matchingTxns.find { it.transactionRef == request.utrNumber }
+            val matchingTxns = repository.getTransactionsForUser(targetUser.id).firstOrNull() ?: emptyList()
+            val matchingTxn = matchingTxns.find { 
+                it.transactionRef == request.utrOrPaymentDetails || it.accountDetail.contains(request.utrOrPaymentDetails)
+            }
             if (matchingTxn != null) {
-                repository.insertTransaction(matchingTxn.copy(status = "SUCCESS", amount = request.amount))
+                repository.insertTransaction(matchingTxn.copy(status = "SUCCESS", amount = amountInt))
             } else {
                 val newTxn = WalletTransaction(
-                    userId = targetUserId,
-                    type = "DEPOSIT",
-                    amount = request.amount,
-                    title = "Deposit Request (+${request.amount} Coins)",
-                    paymentMethod = "UPI QR (anil612@fam)",
-                    accountDetail = "UTR: ${request.utrNumber}",
+                    userId = targetUser.id,
+                    type = request.type,
+                    amount = amountInt,
+                    title = "${if (request.type == "DEPOSIT") "Deposit" else "Withdrawal"} Approved (${request.utrOrPaymentDetails})",
+                    paymentMethod = if (request.type == "DEPOSIT") "UPI QR" else "UPI Cashout",
+                    accountDetail = request.utrOrPaymentDetails,
                     status = "SUCCESS",
-                    transactionRef = request.utrNumber,
+                    transactionRef = request.utrOrPaymentDetails,
                     timestamp = System.currentTimeMillis()
                 )
                 repository.insertTransaction(newTxn)
@@ -1365,36 +1446,42 @@ class TournamentViewModel(
             fetchPendingDepositRequests()
             syncUserDataAndTransactions()
 
-            _eventFlow.emit(UIEvent.ShowMessage("Deposit APPROVED! ${request.amount} Coins credited to ${request.userName}."))
+            _eventFlow.emit(UIEvent.ShowMessage("${request.type} APPROVED! $amountInt Coins updated for ${request.userEmail}."))
         }
     }
 
-    fun rejectDepositRequest(request: DepositRequest) {
+    fun approveDepositRequest(request: DepositRequest) {
+        approveWalletRequest(request)
+    }
+
+    fun rejectWalletRequest(request: WalletRequest) {
         viewModelScope.launch {
-            // Optimistically update deposit requests state so pending item disappears immediately from Admin Panel
-            _depositRequests.value = _depositRequests.value.filter {
-                it.id != request.id && (it.utrNumber.isBlank() || it.utrNumber != request.utrNumber)
-            }
+            _depositRequests.value = _depositRequests.value.filter { it.id != request.id }
 
             try {
-                if (request.id.isNotBlank()) {
-                    firebaseRepository.updateDepositRequestStatusInFirestore(request.id, "REJECTED")
-                }
+                firebaseRepository.rejectWalletRequestInFirestore(request)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
 
-            val targetUserId = request.userId.trim()
+            val targetUserId = request.userId.trim().ifBlank { request.userEmail.trim() }
             val matchingTxns = repository.getTransactionsForUser(targetUserId).firstOrNull() ?: emptyList()
-            val matchingTxn = matchingTxns.find { it.transactionRef == request.utrNumber && it.status == "PENDING" }
+            val matchingTxn = matchingTxns.find { 
+                (it.transactionRef == request.utrOrPaymentDetails || it.accountDetail.contains(request.utrOrPaymentDetails)) && it.status == "PENDING" 
+            }
             if (matchingTxn != null) {
                 repository.insertTransaction(matchingTxn.copy(status = "FAILED"))
             }
 
             fetchPendingDepositRequests()
-            _eventFlow.emit(UIEvent.ShowMessage("Deposit Request Rejected."))
+            _eventFlow.emit(UIEvent.ShowMessage("${request.type} Request Rejected."))
         }
     }
+
+    fun rejectDepositRequest(request: DepositRequest) {
+        rejectWalletRequest(request)
+    }
+
 
     fun depositViaUpiDeepLink(amount: Int, txnRef: String, status: String, paymentDetails: String) {
         viewModelScope.launch {
@@ -1487,37 +1574,6 @@ class TournamentViewModel(
                 }
             }
         }
-    }
-
-    fun withdrawCoins(amount: Int, paymentMethod: String, accountDetail: String): Boolean {
-        val currentUserId = _activeUserId.value
-        val currentUser = user.value ?: User(id = currentUserId)
-        if (currentUser.coinBalance < amount) {
-            viewModelScope.launch {
-                _eventFlow.emit(UIEvent.ShowMessage("Insufficient Coin Balance. Please Deposit Coins First."))
-            }
-            return false
-        }
-        viewModelScope.launch {
-            val newBalance = currentUser.coinBalance - amount
-            repository.saveUserProfile(currentUser.copy(id = currentUserId, coinBalance = newBalance))
-            prefs.edit().putInt("user_coins_$currentUserId", newBalance).apply()
-            refreshRegisteredUsers()
-            
-            val txn = WalletTransaction(
-                userId = currentUserId,
-                type = "WITHDRAWAL",
-                amount = amount,
-                title = "Withdrawal Request ($accountDetail)",
-                paymentMethod = paymentMethod,
-                accountDetail = accountDetail,
-                status = "PENDING",
-                transactionRef = "TXN" + (100000..999999).random()
-            )
-            repository.insertTransaction(txn)
-            _eventFlow.emit(UIEvent.ShowMessage("Withdrawal of $amount coins submitted! Admin has been notified."))
-        }
-        return true
     }
 
     // 2. Booking Actions
