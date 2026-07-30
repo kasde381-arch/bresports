@@ -161,7 +161,7 @@ class FirebaseRepository {
                     gameName = initialGameName,
                     gameUid = initialGameUid,
                     phone = "",
-                    coinBalance = 100,
+                    coinBalance = 0,
                     avatar = photoUrl.ifBlank { "ic_avatar_1" },
                     referralCode = referralCode,
                     joinedAtMillis = System.currentTimeMillis()
@@ -241,7 +241,7 @@ class FirebaseRepository {
                     gameName = initialGameName,
                     gameUid = initialGameUid,
                     phone = "",
-                    coinBalance = 100,
+                    coinBalance = 0,
                     avatar = photoUrl.ifBlank { "ic_avatar_1" },
                     referralCode = referralCode,
                     joinedAtMillis = System.currentTimeMillis()
@@ -276,7 +276,7 @@ class FirebaseRepository {
             val docId = user.email.ifBlank { user.id }.trim().lowercase()
             if (docId.isBlank()) return
 
-            val effectiveCoins = if (user.coinBalance == 0) 100 else user.coinBalance
+            val effectiveCoins = user.coinBalance
             val role = if (docId == "kasde381@gmail.com") "admin" else "user"
 
             val userMap = hashMapOf<String, Any>(
@@ -652,6 +652,28 @@ class FirebaseRepository {
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
+        }
+    }
+
+    suspend fun isUtrAlreadySubmitted(userId: String, utr: String): Boolean {
+        val cleanUtr = utr.trim()
+        if (cleanUtr.isBlank()) return false
+        val firestore = db ?: return false
+        return try {
+            val reqSnapshot = firestore.collection("deposit_requests")
+                .whereEqualTo("utrNumber", cleanUtr)
+                .get()
+                .await()
+            if (!reqSnapshot.isEmpty) return true
+
+            val txnSnapshot = firestore.collection("transactions")
+                .whereEqualTo("transactionRef", cleanUtr)
+                .get()
+                .await()
+            !txnSnapshot.isEmpty
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 

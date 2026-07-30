@@ -165,8 +165,9 @@ fun LoginScreen(
         }
 
         if (selectedEmail.isBlank()) {
-            selectedEmail = "kasde381@gmail.com"
-            selectedName = "Kasde"
+            isAuthenticating = false
+            errorMessage = "Could not retrieve Google account email. Please select an account and try again."
+            return@rememberLauncherForActivityResult
         }
 
         if (!idToken.isNullOrBlank()) {
@@ -479,6 +480,7 @@ fun LoginScreen(
                                 isAuthenticating = true
                                 errorMessage = null
                                 try {
+                                    viewModel.clearStateForAccountSwitch()
                                     val client = getGoogleSignInClient(context)
                                     client.signOut().addOnCompleteListener {
                                         val signInIntent = client.signInIntent

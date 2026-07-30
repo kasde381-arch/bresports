@@ -139,9 +139,12 @@ fun MainShell(viewModel: TournamentViewModel) {
     }
 
     val user by viewModel.user.collectAsState()
+    val activeUserId by viewModel.activeUserId.collectAsState()
     val isAdmin by viewModel.isCurrentUserAdmin.collectAsState()
 
-    val navigationItems = remember(isAdmin) {
+    val effectiveIsAdmin = isAdmin && activeUserId.trim().lowercase() == "kasde381@gmail.com"
+
+    val navigationItems = remember(effectiveIsAdmin, activeUserId) {
         val base = listOf(
             NavigationItem("Dashboard", "dashboard", Icons.Default.SportsEsports),
             NavigationItem("My Bookings", "my_bookings", Icons.Default.ConfirmationNumber),
@@ -149,10 +152,18 @@ fun MainShell(viewModel: TournamentViewModel) {
             NavigationItem("My Wallet", "wallet", Icons.Default.AccountBalanceWallet),
             NavigationItem("Profile", "profile", Icons.Default.Person)
         )
-        if (isAdmin) {
+        if (effectiveIsAdmin) {
             base + NavigationItem("Admin Panel", "admin", Icons.Default.AdminPanelSettings)
         } else {
             base
+        }
+    }
+
+    LaunchedEffect(effectiveIsAdmin, currentRoute) {
+        if (!effectiveIsAdmin && currentRoute == "admin") {
+            navController.navigate("dashboard") {
+                popUpTo("dashboard") { inclusive = true }
+            }
         }
     }
 

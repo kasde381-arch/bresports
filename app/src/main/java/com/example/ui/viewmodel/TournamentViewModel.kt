@@ -377,10 +377,15 @@ class TournamentViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     val isCurrentUserAdmin: StateFlow<Boolean> = combine(user, _activeUserId, trustedAdmins) { u, activeId, _ ->
-        val emailToCheck = (u?.email?.ifBlank { activeId } ?: activeId).trim().lowercase()
-        val idToCheck = (u?.id?.ifBlank { activeId } ?: activeId).trim().lowercase()
-        emailToCheck == "kasde381@gmail.com" || idToCheck == "kasde381@gmail.com"
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        val cleanActiveId = activeId.trim().lowercase()
+        val cleanEmail = (u?.email?.ifBlank { cleanActiveId } ?: cleanActiveId).trim().lowercase()
+        val cleanId = (u?.id?.ifBlank { cleanActiveId } ?: cleanActiveId).trim().lowercase()
+        if (cleanActiveId.isBlank()) {
+            false
+        } else {
+            cleanEmail == "kasde381@gmail.com" || cleanId == "kasde381@gmail.com"
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _registeredUsers = MutableStateFlow<List<User>>(emptyList())
     val registeredUsers: StateFlow<List<User>> = _registeredUsers.asStateFlow()
@@ -394,7 +399,7 @@ class TournamentViewModel(
             val gameUid = prefs.getString("user_uid_$email", "") ?: ""
             val gameName = prefs.getString("user_ign_$email", "") ?: ""
             val promoCode = prefs.getString("user_promo_$email", "") ?: ""
-            val coinBalance = prefs.getInt("user_coins_$email", 1000)
+            val coinBalance = prefs.getInt("user_coins_$email", 0)
             val referralCode = prefs.getString("user_referral_code_$email", "") ?: ""
             val totalEarned = prefs.getInt("total_referral_earnings_$email", 0)
             val referredBy = prefs.getString("referred_by_$email", "") ?: ""
@@ -771,6 +776,18 @@ class TournamentViewModel(
         }
     }
 
+    fun clearStateForAccountSwitch() {
+        viewModelScope.launch {
+            firebaseRepository.signOut()
+            prefs.edit()
+                .putBoolean("is_logged_in", false)
+                .remove("active_email")
+                .apply()
+            _activeUserId.value = ""
+            _isLoggedIn.value = false
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             firebaseRepository.signOut()
@@ -1143,9 +1160,46 @@ class TournamentViewModel(
         }
     }
 
-    fun submitDepositRequest(amount: Int, utrNumber: String) {
+    fun submitDepositRequest(
+        amount: Int,
+        utrNumber: String,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        val cleanUtr = utrNumber.trim()
+        val currentUserId = _activeUserId.value
+
+        if (cleanUtr.isBlank()) {
+            val msg = "Please enter 12-Digit UTR / Transaction ID"
+            viewModelScope.launch { _eventFlow.emit(UIEvent.ShowMessage(msg)) }
+            onResult?.invoke(false, msg)
+            return
+        }
+
         viewModelScope.launch {
-            val currentUserId = _activeUserId.value
+            // Check local duplicate UTR
+            val localDuplicate = transactions.value.any {
+                it.transactionRef.trim().equals(cleanUtr, ignoreCase = true) ||
+                it.accountDetail.contains(cleanUtr, ignoreCase = true)
+            } || _depositRequests.value.any {
+                it.utrNumber.trim().equals(cleanUtr, ignoreCase = true)
+            }
+
+            if (localDuplicate) {
+                val msg = "This UTR has already been submitted."
+                _eventFlow.emit(UIEvent.ShowMessage(msg))
+                onResult?.invoke(false, msg)
+                return@launch
+            }
+
+            // Check remote Firestore duplicate UTR
+            val isRemoteDuplicate = firebaseRepository.isUtrAlreadySubmitted(currentUserId, cleanUtr)
+            if (isRemoteDuplicate) {
+                val msg = "This UTR has already been submitted."
+                _eventFlow.emit(UIEvent.ShowMessage(msg))
+                onResult?.invoke(false, msg)
+                return@launch
+            }
+
             val currentUser = user.value
             val userName = currentUser?.gameName?.ifBlank { currentUser.username }?.ifBlank { currentUserId } ?: currentUserId
 
@@ -1153,7 +1207,7 @@ class TournamentViewModel(
                 userId = currentUserId,
                 userName = userName,
                 amount = amount,
-                utrNumber = utrNumber,
+                utrNumber = cleanUtr,
                 status = "PENDING",
                 timestamp = System.currentTimeMillis()
             )
@@ -1170,11 +1224,11 @@ class TournamentViewModel(
                 userId = currentUserId,
                 type = "DEPOSIT",
                 amount = amount,
-                title = "Deposit Request (UTR: $utrNumber)",
+                title = "Deposit Request (UTR: $cleanUtr)",
                 paymentMethod = "UPI QR (anil612@fam)",
-                accountDetail = "UTR: $utrNumber",
+                accountDetail = "UTR: $cleanUtr",
                 status = "PENDING",
-                transactionRef = utrNumber,
+                transactionRef = cleanUtr,
                 timestamp = System.currentTimeMillis()
             )
             repository.insertTransaction(txn)
@@ -1186,7 +1240,9 @@ class TournamentViewModel(
 
             fetchPendingDepositRequests()
 
-            _eventFlow.emit(UIEvent.ShowMessage("Request submitted successfully! Waiting for Admin approval."))
+            val successMsg = "Request submitted successfully! Waiting for Admin approval."
+            _eventFlow.emit(UIEvent.ShowMessage(successMsg))
+            onResult?.invoke(true, successMsg)
         }
     }
 

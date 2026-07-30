@@ -314,6 +314,7 @@ fun MyWalletScreen(
                         var dialogAmount by remember { mutableStateOf("100") }
                         var dialogUtr by remember { mutableStateOf("") }
                         var showManualQrSection by remember { mutableStateOf(false) }
+                        var isSubmittingDeposit by remember { mutableStateOf(false) }
 
                         Column(
                             modifier = Modifier
@@ -534,6 +535,7 @@ fun MyWalletScreen(
                             val currentAmt = dialogAmount.toIntOrNull() ?: 0
                             Button(
                                 onClick = {
+                                    if (isSubmittingDeposit) return@Button
                                     if (currentAmt <= 0) {
                                         Toast.makeText(context, "Please enter a valid deposit amount", Toast.LENGTH_SHORT).show()
                                         return@Button
@@ -543,10 +545,18 @@ fun MyWalletScreen(
                                         return@Button
                                     }
 
-                                    viewModel.submitDepositRequest(currentAmt, dialogUtr)
-                                    showDepositDialog = false
+                                    isSubmittingDeposit = true
+                                    viewModel.submitDepositRequest(currentAmt, dialogUtr) { success, msg ->
+                                        isSubmittingDeposit = false
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        if (success) {
+                                            dialogUtr = ""
+                                            dialogAmount = "100"
+                                            showDepositDialog = false
+                                        }
+                                    }
                                 },
-                                enabled = currentAmt > 0 && dialogUtr.isNotBlank(),
+                                enabled = !isSubmittingDeposit && currentAmt > 0 && dialogUtr.isNotBlank(),
                                 colors = ButtonDefaults.buttonColors(containerColor = FireOrange),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -554,24 +564,32 @@ fun MyWalletScreen(
                                     .height(50.dp)
                                     .border(1.dp, GoldBooyah.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Send,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
+                                if (isSubmittingDeposit) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.5.dp
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "SUBMIT DEPOSIT REQUEST",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 14.sp,
-                                        letterSpacing = 0.5.sp,
-                                        color = Color.White
-                                    )
+                                } else {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Send,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "SUBMIT DEPOSIT REQUEST",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 14.sp,
+                                            letterSpacing = 0.5.sp,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }
