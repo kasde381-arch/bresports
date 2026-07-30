@@ -161,7 +161,7 @@ class FirebaseRepository {
                     gameName = initialGameName,
                     gameUid = initialGameUid,
                     phone = "",
-                    coinBalance = 0,
+                    coinBalance = 100,
                     avatar = photoUrl.ifBlank { "ic_avatar_1" },
                     referralCode = referralCode,
                     joinedAtMillis = System.currentTimeMillis()
@@ -170,7 +170,7 @@ class FirebaseRepository {
                 Result.success(freshUser)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FirestoreSync", "Error in loginWithGoogleFromFirebaseUser: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -241,7 +241,7 @@ class FirebaseRepository {
                     gameName = initialGameName,
                     gameUid = initialGameUid,
                     phone = "",
-                    coinBalance = 0,
+                    coinBalance = 100,
                     avatar = photoUrl.ifBlank { "ic_avatar_1" },
                     referralCode = referralCode,
                     joinedAtMillis = System.currentTimeMillis()
@@ -251,7 +251,7 @@ class FirebaseRepository {
                 Result.success(freshUser)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FirestoreSync", "Error in loginWithGoogle: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -268,35 +268,51 @@ class FirebaseRepository {
     }
 
     suspend fun saveUserProfileToFirestore(user: User) {
-        val firestore = db ?: return
+        val firestore = db ?: run {
+            Log.e("FirestoreSync", "Firestore instance is null when saving user ${user.email}")
+            return
+        }
         try {
             val docId = user.email.ifBlank { user.id }.trim().lowercase()
             if (docId.isBlank()) return
 
-            val userMap = hashMapOf(
+            val effectiveCoins = if (user.coinBalance == 0) 100 else user.coinBalance
+            val role = if (docId == "kasde381@gmail.com") "admin" else "user"
+
+            val userMap = hashMapOf<String, Any>(
                 "id" to docId,
                 "email" to user.email.ifBlank { docId },
                 "username" to user.username,
                 "gameUid" to user.gameUid,
                 "gameName" to user.gameName,
                 "phone" to user.phone,
-                "coinBalance" to user.coinBalance,
-                "walletBalance" to user.coinBalance,
+                "coins" to effectiveCoins,
+                "coinBalance" to effectiveCoins,
+                "walletBalance" to effectiveCoins,
                 "promoCode" to user.promoCode,
                 "referralCode" to user.referralCode,
                 "referredByCode" to user.referredByCode,
                 "totalEarnedReferrals" to user.totalEarnedReferrals,
                 "joinedAtMillis" to user.joinedAtMillis,
                 "avatar" to user.avatar,
-                "role" to if (docId == "kasde381@gmail.com") "admin" else "user"
+                "role" to role
             )
 
-            firestore.collection("users")
+            Log.d("FirestoreSync", "Writing document users/$docId to Firestore: $userMap")
+
+            val setTask = firestore.collection("users")
                 .document(docId)
                 .set(userMap, SetOptions.merge())
-                .await()
+
+            setTask.addOnSuccessListener {
+                Log.d("FirestoreSync", "SUCCESS: Document users/$docId saved successfully in Cloud Firestore!")
+            }.addOnFailureListener { e ->
+                Log.e("FirestoreSync", "FAILURE: Failed to write document users/$docId to Cloud Firestore: ${e.message}", e)
+            }
+
+            setTask.await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("FirestoreSync", "Exception writing user profile to Firestore: ${e.message}", e)
         }
     }
 
